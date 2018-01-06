@@ -17,8 +17,8 @@ type Server struct {
 	Version      int
 	CookieName   string
 	services     map[string]*service
-	data         map[string]interface{}
-	dependencies map[reflect.Type]reflect.Value
+	data         map[string]dataRecord
+	dependencies dataProvider
 }
 
 var log Logger = defaultLogger{}
@@ -48,18 +48,14 @@ func SetLogger(logger Logger) {
 func NewServer() *Server {
 	s := Server{}
 	s.services = make(map[string]*service)
-	s.data = make(map[string]interface{})
+	s.data = make(map[string]dataRecord)
 	s.Version = 1
 	s.CookieName = "remote-" + randString(8)
 
-	s.dependencies = make(map[reflect.Type]reflect.Value)
+	s.dependencies = newDataProvider()
 	s.RegisterProvider(func(r *http.Request) *http.Request { return r })
 
 	return &s
-}
-
-func getRequest() {
-
 }
 
 // Register adds an object to the API
@@ -69,28 +65,35 @@ func (s *Server) Register(rcvr interface{}) error {
 
 // RegisterProvider adds a factory method for parameters of remote methods
 func (s *Server) RegisterProvider(provider interface{}) error {
-	pType := reflect.TypeOf(provider)
-	if pType.Kind() != reflect.Func || pType.NumOut() != 1 || pType.NumIn() != 1 || pType.In(0) != requestType {
-		msg := "Invalid parameter for RegisterProvider, function factory is expected"
-		log.Errorf(msg)
-		return errors.New(msg)
-	}
-
-	s.dependencies[pType.Out(0)] = reflect.ValueOf(provider)
-	return nil
+	return s.dependencies.Add(provider)
 }
 
-// RegisterName adds an object to the API with custom name
-func (s *Server) RegisterName(name string, rcvr interface{}) error {
+// RegisterWithName adds an object to the API with custom name
+func (s *Server) RegisterWithName(name string, rcvr interface{}) error {
 	return s.register(name, rcvr)
 }
 
-// RegisterData adds a constant data to the API
-func (s *Server) RegisterData(name string, rcvr interface{}) error {
+// RegisterVariable adds a variable data to the API
+func (s *Server) RegisterVariable(name string, rcvr interface{}) error {
+	return s.registerData(name, rcvr, false)
+}
+
+// RegisterConstant adds a constant data to the API
+func (s *Server) RegisterConstant(name string, rcvr interface{}) error {
+	return s.registerData(name, rcvr, true)
+}
+
+func (s *Server) registerData(name string, rcvr interface{}, isConstant bool) error {
 	if _, ok := s.data[name]; ok {
 		return errors.New("Name already used")
 	}
-	s.data[name] = rcvr
+
+	if isConstant {
+		s.data[name] = dataRecord{isConstant: true, value: rcvr}
+	} else {
+		s.data[name] = dataRecord{isConstant: false, rtype: reflect.TypeOf(rcvr)}
+	}
+
 	return nil
 }
 
@@ -105,35 +108,39 @@ func (s *Server) Process(input []byte, r *http.Request) []Response {
 		return response
 	}
 
+	res := make(chan *Response)
+
 	for i := range data {
-		data[i].dependencies = s.dependencies
+		data[i].dependencies = &s.dependencies
 		data[i].request = r
 
-		res, err := s.Call(data[i])
-		response[i].ID = data[i].ID
-		if err != nil {
-			response[i].Error = err.Error()
-		} else {
-			response[i].Data = res
-		}
+		go s.Call(data[i], res)
+	}
+
+	for i := range data {
+		response[i] = *(<-res)
 	}
 
 	return response
 }
 
 // Call allows to execute some Servers's method
-func (s *Server) Call(call *callInfo) (interface{}, error) {
+func (s *Server) Call(call *callInfo, res chan *Response) {
+	response := Response{ID: call.ID}
+
 	log.Debugf("Call %s.%s", call.Service(), call.Method())
 	service, ok := s.services[call.Service()]
 	if !ok {
-		return nil, errors.New("Unknown service")
+		response.Error = "Unknown service"
+	} else {
+		service.Call(call, &response)
 	}
 
-	return service.Call(call)
+	res <- &response
 }
 
 // JSON returns a json string representation of the end point
-func (s *Server) JSON(key string) (string, error) {
+func (s *Server) toJSONString(key string, req *http.Request) (string, error) {
 	buffer := bytes.NewBufferString("{ \"api\":{ ")
 
 	//services
@@ -155,7 +162,17 @@ func (s *Server) JSON(key string) (string, error) {
 	//data
 	comma = false
 	for key, value := range s.data {
-		jsonValue, err := json.Marshal(value)
+		var err error
+		var jsonValue []byte
+
+		if value.isConstant {
+			jsonValue, err = json.Marshal(value.value)
+		} else {
+			raw, err := s.dependencies.Value(&value.rtype, req)
+			if err == nil {
+				jsonValue, err = json.Marshal(raw.Interface())
+			}
+		}
 		if err != nil {
 			return "", err
 		}
@@ -192,7 +209,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "GET" {
-		s.serveAPI(w, token.Value)
+		s.serveAPI(w, r, token.Value)
 		return
 	}
 
@@ -229,9 +246,9 @@ func (s *Server) serveError(w http.ResponseWriter, err error) {
 	http.Error(w, text, 500)
 }
 
-func (s *Server) serveAPI(w http.ResponseWriter, token string) {
+func (s *Server) serveAPI(w http.ResponseWriter, req *http.Request, token string) {
 	w.Header().Set("Content-type", "text/plain")
-	api, _ := s.JSON(token)
+	api, _ := s.toJSONString(token, req)
 	apiText(w, "remote", api)
 }
 

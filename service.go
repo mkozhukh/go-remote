@@ -2,7 +2,6 @@ package remote
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"reflect"
 	"unicode"
@@ -45,13 +44,7 @@ func valueByType(atype reflect.Type, i int, thecall *callInfo) (reflect.Value, e
 	var argv reflect.Value
 
 	if i >= len(thecall.Args) {
-		test, ok := thecall.dependencies[atype]
-		if !ok {
-			return argv, errors.New("Missed parameter in method call")
-		}
-
-		args := []reflect.Value{reflect.ValueOf(thecall.request)}
-		return test.Call(args)[0], nil
+		return thecall.dependencies.Value(&atype, thecall.request)
 	}
 
 	// Decode the argument value
@@ -74,12 +67,13 @@ func valueByType(atype reflect.Type, i int, thecall *callInfo) (reflect.Value, e
 	return argv, nil
 }
 
-func (s *service) Call(thecall *callInfo) (interface{}, error) {
+func (s *service) Call(thecall *callInfo, res *Response) {
 	var err error
 
 	mtype, ok := s.method[thecall.Method()]
 	if !ok {
-		return nil, errors.New("Invalid method name")
+		res.Error = "Invalid method name"
+		return
 	}
 
 	argv := make([]reflect.Value, len(mtype.inTypes))
@@ -89,7 +83,8 @@ func (s *service) Call(thecall *callInfo) (interface{}, error) {
 		argv[i], err = valueByType(mtype.inTypes[i], i-1, thecall)
 
 		if err != nil {
-			return nil, err
+			res.Error = err.Error()
+			return
 		}
 	}
 
@@ -101,14 +96,15 @@ func (s *service) Call(thecall *callInfo) (interface{}, error) {
 		if mtype.outTypes[i] == typeOfError {
 			errResult := returnValues[i].Interface()
 			if errResult != nil {
-				return nil, errResult.(error)
+				res.Error = errResult.(error).Error()
+				return
 			}
 		} else {
 			outResult = returnValues[i].Interface()
 		}
 	}
 
-	return outResult, nil
+	res.Data = outResult
 }
 
 // Is this an exported - upper case - name?

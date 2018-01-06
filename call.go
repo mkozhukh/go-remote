@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"reflect"
 	"strings"
 )
 
@@ -23,7 +22,7 @@ type callInfo struct {
 	Name string            `json:"name"`
 	Args []json.RawMessage `json:"args"`
 
-	dependencies map[reflect.Type]reflect.Value
+	dependencies *dataProvider
 	request      *http.Request
 	service      string
 	method       string

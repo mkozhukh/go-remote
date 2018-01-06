@@ -9,6 +9,13 @@ import (
 	"testing"
 )
 
+type userStruct struct {
+	Agent string
+}
+
+func getUserStruct(r *http.Request) *userStruct {
+	return &userStruct{Agent: r.UserAgent()}
+}
 func TestHttpRequestAPI(t *testing.T) {
 	r := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -39,7 +46,7 @@ func TestHttpPost(t *testing.T) {
 
 	s := NewServer()
 	s.CookieName = "test"
-	s.RegisterName("x", StubCalck2{})
+	s.RegisterWithName("x", StubCalck2{})
 	s.ServeHTTP(w, r)
 
 	res := w.Result()
@@ -72,7 +79,7 @@ func TestHttpPostDI(t *testing.T) {
 
 	s := NewServer()
 	s.CookieName = "test"
-	s.RegisterName("x", StubCalck2{})
+	s.RegisterWithName("x", StubCalck2{})
 	s.ServeHTTP(w, r)
 
 	res := w.Result()
@@ -92,5 +99,28 @@ func TestHttpPostDI(t *testing.T) {
 
 	if len(data) != 1 || data[0]["data"].(string) != "/" {
 		t.Errorf("Wrong response: %v", data)
+	}
+}
+
+func TestHttpApiDI(t *testing.T) {
+	r := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+
+	s := NewServer()
+	s.RegisterConstant("a", 12)
+	s.RegisterProvider(getUserStruct)
+	s.RegisterVariable("b", &userStruct{})
+	s.ServeHTTP(w, r)
+
+	res := w.Result()
+	if res.StatusCode != 200 {
+		t.Errorf("Error result code %d", res.StatusCode)
+		return
+	}
+
+	text, _ := ioutil.ReadAll(res.Body)
+
+	if len(text) != 2069 {
+		t.Errorf("Wrong response: %v (%d)", string(text), len(text))
 	}
 }

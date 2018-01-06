@@ -41,7 +41,7 @@ func compareJSON(actualString string, expectedString string) bool {
 
 func TestNewServer(t *testing.T) {
 	c := NewServer()
-	text, _ := c.JSON("1")
+	text, _ := c.toJSONString("1", nil)
 	if string(text) != `{ "api":{ }, "data":{}, "key":"1", "version":1}` {
 		t.Errorf("Incorrect version serialization, %s", text)
 	}
@@ -55,14 +55,14 @@ func TestRegisterData(t *testing.T) {
 		Height int
 	}{"Alex", 100}
 
-	err := c.RegisterData("test1", 123)
+	err := c.RegisterConstant("test1", 123)
 	if err != nil {
 		t.Error("RegisterData error " + err.Error())
 	}
-	c.RegisterData("test2", someData)
-	c.RegisterData("test3", &someData)
+	c.RegisterConstant("test2", someData)
+	c.RegisterConstant("test3", &someData)
 
-	text, _ := c.JSON("1")
+	text, _ := c.toJSONString("1", nil)
 	if !compareJSON(string(text), `{ "api":{ }, "data":{"test1":123,"test2":{"Name":"Alex","Height":100},"test3":{"Name":"Alex","Height":100}}, "key":"1", "version":1}`) {
 		t.Errorf("Incorrect data serialization, %s", text)
 	}
@@ -72,9 +72,9 @@ func TestRegisterName(t *testing.T) {
 	c := NewServer()
 
 	c.Register(StubCalck{})
-	c.RegisterName("c2", StubCalck{})
+	c.RegisterWithName("c2", StubCalck{})
 
-	text, err := c.JSON("1")
+	text, err := c.toJSONString("1", nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -105,8 +105,10 @@ func TestProcessMultiple(t *testing.T) {
 	s.Register(StubCalck{})
 	res := s.Process(c, nil)
 
-	if len(res) != 2 || res[0].Data.(int) != 5 || res[1].Data.(int) != 1 {
-		t.Errorf("Incorrect api serialization, %+v", res)
+	if len(res) != 2 ||
+		((res[0].Data.(int) != 5 || res[1].Data.(int) != 1) &&
+			(res[1].Data.(int) != 5 || res[0].Data.(int) != 1)) {
+		t.Errorf("Incorrect call result, %+v", res)
 	}
 }
 
@@ -118,7 +120,7 @@ func TestProcessComplex(t *testing.T) {
 	res := s.Process(c, nil)
 
 	if len(res) != 1 || res[0].Data.(StubResult).X != 103 || res[0].Data.(StubResult).Y != 203 {
-		t.Errorf("Incorrect api serialization, %+v", res)
+		t.Errorf("Incorrect call result, %+v", res)
 	}
 
 	str, err := json.Marshal(res)

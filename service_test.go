@@ -44,15 +44,16 @@ func TestServiceCall(t *testing.T) {
 	s := newService(StubCalck2{})
 	thecall := callInfo{Name: "StubCalck2.Add", Args: []json.RawMessage{[]byte("2"), []byte("3")}}
 
-	x, err := s.Call(&thecall)
+	c := Response{}
+	s.Call(&thecall, &c)
 
-	if err != nil {
-		t.Error(err)
+	if c.Error != "" {
+		t.Error(c.Error)
 		return
 	}
 
-	if x.(int) != 5 {
-		t.Errorf("Invalid call result, 5 <> %d", x)
+	if c.Data.(int) != 5 {
+		t.Errorf("Invalid call result, 5 <> %d", c.Data)
 	}
 }
 
@@ -60,15 +61,16 @@ func TestServiceComplexCall(t *testing.T) {
 	s := newService(StubCalck2{})
 	thecall := callInfo{Name: "StubCalck2.AddLine", Args: []json.RawMessage{[]byte("{\"X1\":100, \"X2\":200 }"), []byte("3")}}
 
-	x, err := s.Call(&thecall)
+	c := Response{}
+	s.Call(&thecall, &c)
 
-	if err != nil {
-		t.Error(err)
+	if c.Error != "" {
+		t.Error(c.Error)
 		return
 	}
 
-	x1 := x.(LineStub).X1
-	x2 := x.(LineStub).X2
+	x1 := c.Data.(LineStub).X1
+	x2 := c.Data.(LineStub).X2
 	if x1 != 103 || x2 != 203 {
 		t.Errorf("Invalid call result, 103 <> %d, 203 <> %d", x1, x2)
 	}
@@ -77,23 +79,27 @@ func TestServiceComplexCall(t *testing.T) {
 func TestServiceMixedResultCall(t *testing.T) {
 	s := newService(StubCalck2{})
 	thecall := callInfo{Name: "StubCalck2.MixedResult", Args: []json.RawMessage{[]byte("2"), []byte("3")}}
-	x, err := s.Call(&thecall)
 
-	if err != nil {
-		t.Error(err)
+	c := Response{}
+	s.Call(&thecall, &c)
+
+	if c.Error != "" {
+		t.Error(c.Error)
 		return
 	}
 
-	if x != 5 {
-		t.Errorf("Invalid call result, 5 <> %d", x)
+	if c.Data != 5 {
+		t.Errorf("Invalid call result, 5 <> %d", c.Data)
 	}
 
 	thecall = callInfo{Name: "StubCalck2.MixedResult", Args: []json.RawMessage{[]byte("0"), []byte("3")}}
-	x, err = s.Call(&thecall)
 
-	if err != nil {
-		if err.Error() != "Expected error" {
-			t.Error(err)
+	c = Response{}
+	s.Call(&thecall, &c)
+
+	if c.Error != "" {
+		if c.Error != "Expected error" {
+			t.Error(c.Error)
 		}
 	} else {
 		t.Error("Error was expected but was not received")
@@ -103,19 +109,21 @@ func TestServiceMixedResultCall(t *testing.T) {
 func TestServiceSingleResultCall(t *testing.T) {
 	s := newService(StubCalck2{})
 	thecall := callInfo{Name: "StubCalck2.ErrorResult", Args: []json.RawMessage{[]byte("2")}}
-	_, err := s.Call(&thecall)
+	c := Response{}
+	s.Call(&thecall, &c)
 
-	if err != nil {
-		t.Error(err)
+	if c.Error != "" {
+		t.Error(c.Error)
 		return
 	}
 
 	thecall = callInfo{Name: "StubCalck2.ErrorResult", Args: []json.RawMessage{[]byte("0")}}
-	_, err = s.Call(&thecall)
+	c = Response{}
+	s.Call(&thecall, &c)
 
-	if err != nil {
-		if err.Error() != "Expected error" {
-			t.Error(err)
+	if c.Error != "" {
+		if c.Error != "Expected error" {
+			t.Error(c.Error)
 		}
 	} else {
 		t.Error("Error was expected but was not received")
