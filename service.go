@@ -44,7 +44,7 @@ func valueByType(atype reflect.Type, i int, thecall *callInfo) (reflect.Value, e
 	var argv reflect.Value
 
 	if i >= len(thecall.Args) {
-		return thecall.dependencies.Value(&atype, thecall.request)
+		return thecall.dependencies.Value(&atype, thecall.request, thecall.writer)
 	}
 
 	// Decode the argument value
@@ -81,7 +81,6 @@ func (s *service) Call(thecall *callInfo, res *Response) {
 	argv[0] = s.rcvr
 	for i := 1; i < len(mtype.inTypes); i++ {
 		argv[i], err = valueByType(mtype.inTypes[i], i-1, thecall)
-
 		if err != nil {
 			res.Error = err.Error()
 			return

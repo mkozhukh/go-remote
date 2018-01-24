@@ -54,6 +54,7 @@ func NewServer() *Server {
 
 	s.dependencies = newDataProvider()
 	s.RegisterProvider(func(r *http.Request) *http.Request { return r })
+	s.RegisterProvider(func(r *http.Request, w http.ResponseWriter) http.ResponseWriter { return w })
 
 	return &s
 }
@@ -98,7 +99,7 @@ func (s *Server) registerData(name string, rcvr interface{}, isConstant bool) er
 }
 
 // Process starts the package processing, executing all requested methods
-func (s *Server) Process(input []byte, r *http.Request) []Response {
+func (s *Server) Process(input []byte, r *http.Request, w http.ResponseWriter) []Response {
 	data := callData{}
 	err := json.Unmarshal(input, &data)
 	response := make([]Response, len(data))
@@ -113,6 +114,7 @@ func (s *Server) Process(input []byte, r *http.Request) []Response {
 	for i := range data {
 		data[i].dependencies = &s.dependencies
 		data[i].request = r
+		data[i].writer = w
 
 		go s.Call(data[i], res)
 	}
@@ -140,7 +142,7 @@ func (s *Server) Call(call *callInfo, res chan *Response) {
 }
 
 // JSON returns a json string representation of the end point
-func (s *Server) toJSONString(key string, req *http.Request) (string, error) {
+func (s *Server) toJSONString(key string, req *http.Request, w http.ResponseWriter) (string, error) {
 	buffer := bytes.NewBufferString("{ \"api\":{ ")
 
 	//services
@@ -168,7 +170,7 @@ func (s *Server) toJSONString(key string, req *http.Request) (string, error) {
 		if value.isConstant {
 			jsonValue, err = json.Marshal(value.value)
 		} else {
-			raw, err := s.dependencies.Value(&value.rtype, req)
+			raw, err := s.dependencies.Value(&value.rtype, req, w)
 			if err == nil {
 				jsonValue, err = json.Marshal(raw.Interface())
 			}
@@ -233,7 +235,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := s.Process(body, r)
+	res := s.Process(body, r, w)
 	s.serveJSON(w, res)
 }
 
@@ -248,7 +250,7 @@ func (s *Server) serveError(w http.ResponseWriter, err error) {
 
 func (s *Server) serveAPI(w http.ResponseWriter, req *http.Request, token string) {
 	w.Header().Set("Content-type", "text/plain")
-	api, _ := s.toJSONString(token, req)
+	api, _ := s.toJSONString(token, req, w)
 	apiText(w, "remote", api)
 }
 

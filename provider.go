@@ -24,7 +24,11 @@ type dataProvider struct {
 
 func (d *dataProvider) Add(provider interface{}) error {
 	pType := reflect.TypeOf(provider)
-	if pType.Kind() != reflect.Func || pType.NumOut() != 1 || pType.NumIn() != 1 || pType.In(0) != requestType {
+	if pType.Kind() != reflect.Func ||
+		pType.NumOut() != 1 ||
+		pType.NumIn() < 1 ||
+		pType.NumIn() > 2 ||
+		pType.In(0) != requestType {
 		msg := "Invalid parameter for RegisterProvider, function factory is expected"
 		log.Errorf(msg)
 		return errors.New(msg)
@@ -34,12 +38,19 @@ func (d *dataProvider) Add(provider interface{}) error {
 	return nil
 }
 
-func (d *dataProvider) Value(rtype *reflect.Type, req *http.Request) (reflect.Value, error) {
+func (d *dataProvider) Value(rtype *reflect.Type, req *http.Request, w http.ResponseWriter) (reflect.Value, error) {
 	test, ok := d.data[*rtype]
+	log.Debugf("%v+", *rtype)
 	if !ok {
 		return reflect.Value{}, errors.New("Missed parameter in method call")
 	}
 
-	args := []reflect.Value{reflect.ValueOf(req)}
+	var args []reflect.Value
+	if test.Type().NumIn() == 1 {
+		args = []reflect.Value{reflect.ValueOf(req)}
+	} else {
+		args = []reflect.Value{reflect.ValueOf(req), reflect.ValueOf(w)}
+	}
+
 	return test.Call(args)[0], nil
 }

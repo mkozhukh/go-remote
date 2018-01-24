@@ -24,6 +24,7 @@ type callInfo struct {
 
 	dependencies *dataProvider
 	request      *http.Request
+	writer       http.ResponseWriter
 	service      string
 	method       string
 }
