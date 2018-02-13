@@ -17,9 +17,10 @@ type methodType struct {
 }
 
 type service struct {
-	name   string                 // name of service
-	rcvr   reflect.Value          // receiver of methods for the service
-	typ    reflect.Type           // type of the receiver
+	name   string        // name of service
+	rcvr   reflect.Value // receiver of methods for the service
+	typ    reflect.Type  // type of the receiver
+	guard  Guard
 	method map[string]*methodType // registered methods
 }
 
@@ -70,9 +71,15 @@ func valueByType(atype reflect.Type, i int, thecall *callInfo) (reflect.Value, e
 func (s *service) Call(thecall *callInfo, res *Response) {
 	var err error
 
+	if s.guard != nil && !s.guard(thecall.request) {
+		res.Error = "Access Denied"
+		return
+	}
+
 	mtype, ok := s.method[thecall.Method()]
 	if !ok {
 		res.Error = "Invalid method name"
+		log.Debugf(res.Error)
 		return
 	}
 
@@ -83,6 +90,7 @@ func (s *service) Call(thecall *callInfo, res *Response) {
 		argv[i], err = valueByType(mtype.inTypes[i], i-1, thecall)
 		if err != nil {
 			res.Error = err.Error()
+			log.Debugf("Invalid arguments, %s", err.Error())
 			return
 		}
 	}
@@ -123,11 +131,12 @@ func isExportedOrBuiltinType(t reflect.Type) bool {
 }
 
 // creates a new service object
-func newService(rcvr interface{}) *service {
+func newService(rcvr interface{}, guard Guard) *service {
 	s := new(service)
 	s.typ = reflect.TypeOf(rcvr)
 	s.rcvr = reflect.ValueOf(rcvr)
 	s.name = reflect.Indirect(s.rcvr).Type().Name()
+	s.guard = guard
 
 	// install the methods
 	s.method = suitableMethods(s.typ, true)

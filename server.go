@@ -12,6 +12,9 @@ import (
 
 var requestType = reflect.TypeOf(&http.Request{})
 
+// Guard is a guard function
+type Guard = func(r *http.Request) bool
+
 // Server structure stores all methods and data of API
 type Server struct {
 	Version      int
@@ -60,8 +63,8 @@ func NewServer() *Server {
 }
 
 // Register adds an object to the API
-func (s *Server) Register(rcvr interface{}) error {
-	return s.register("", rcvr)
+func (s *Server) Register(name string, rcvr interface{}) error {
+	return s.register(name, rcvr, nil)
 }
 
 // RegisterProvider adds a factory method for parameters of remote methods
@@ -69,9 +72,9 @@ func (s *Server) RegisterProvider(provider interface{}) error {
 	return s.dependencies.Add(provider)
 }
 
-// RegisterWithName adds an object to the API with custom name
-func (s *Server) RegisterWithName(name string, rcvr interface{}) error {
-	return s.register(name, rcvr)
+// RegisterWithGuard adds an object to the API with a guard
+func (s *Server) RegisterWithGuard(name string, rcvr interface{}, guard Guard) error {
+	return s.register(name, rcvr, guard)
 }
 
 // RegisterVariable adds a variable data to the API
@@ -192,8 +195,8 @@ func (s *Server) toJSONString(key string, req *http.Request, w http.ResponseWrit
 	return buffer.String(), nil
 }
 
-func (s *Server) register(name string, rcvr interface{}) error {
-	serv := newService(rcvr)
+func (s *Server) register(name string, rcvr interface{}, guard Guard) error {
+	serv := newService(rcvr, guard)
 	if name == "" {
 		name = serv.name
 	}
