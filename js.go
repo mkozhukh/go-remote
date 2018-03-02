@@ -53,23 +53,29 @@ var apiRawText = `(function(master, config){
 	}
 	
 	function send(name, args){
-		var pack = queue.filter(obj => obj.status === "new").map(obj => {
+		var pack = queue.filter(function(obj){ return obj.status === "new"; }).map(function(obj){
 			obj.status = "wait";
 			return obj.data
 		});
 
 		if (!pack.length) return;
-	
+		
+		var headers = {
+			'Accept': 'application/json',
+			'Content-Type': 'application/json',
+			"Remote-CSRF": csrf
+		};
+		var data = window.fetch ? 
 		fetch(url, {
 			method: "POST",
 			credentials: "include",
-			headers:{
-				'Accept': 'application/json',
-				'Content-Type': 'application/json',
-				"Remote-CSRF": csrf
-			},
+			headers:headers,
 			body:JSON.stringify(pack)
-		}).catch( _ => false).then(res => {
+		}) 
+		: 
+		webix.ajax().headers(headers).post(url, pack)
+
+		data["catch"](function(){ return false; }).then(function(res){
 			var all = {};
 	
 			if (!res || !res.ok){
