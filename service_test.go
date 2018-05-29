@@ -41,7 +41,7 @@ func (c StubCalck2) MirrorURL(x int, y int, r *http.Request) string {
 }
 
 func TestServiceCall(t *testing.T) {
-	s := newService(StubCalck2{})
+	s := newService(StubCalck2{}, nil)
 	thecall := callInfo{Name: "StubCalck2.Add", Args: []json.RawMessage{[]byte("2"), []byte("3")}}
 
 	c := Response{}
@@ -58,7 +58,7 @@ func TestServiceCall(t *testing.T) {
 }
 
 func TestServiceComplexCall(t *testing.T) {
-	s := newService(StubCalck2{})
+	s := newService(StubCalck2{}, nil)
 	thecall := callInfo{Name: "StubCalck2.AddLine", Args: []json.RawMessage{[]byte("{\"X1\":100, \"X2\":200 }"), []byte("3")}}
 
 	c := Response{}
@@ -77,7 +77,7 @@ func TestServiceComplexCall(t *testing.T) {
 }
 
 func TestServiceMixedResultCall(t *testing.T) {
-	s := newService(StubCalck2{})
+	s := newService(StubCalck2{}, nil)
 	thecall := callInfo{Name: "StubCalck2.MixedResult", Args: []json.RawMessage{[]byte("2"), []byte("3")}}
 
 	c := Response{}
@@ -107,7 +107,7 @@ func TestServiceMixedResultCall(t *testing.T) {
 }
 
 func TestServiceSingleResultCall(t *testing.T) {
-	s := newService(StubCalck2{})
+	s := newService(StubCalck2{}, nil)
 	thecall := callInfo{Name: "StubCalck2.ErrorResult", Args: []json.RawMessage{[]byte("2")}}
 	c := Response{}
 	s.Call(&thecall, &c)

@@ -29,7 +29,7 @@ func TestHttpRequestAPI(t *testing.T) {
 	}
 
 	text, _ := ioutil.ReadAll(res.Body)
-	if len(text) != 2046 {
+	if len(text) != 2208 {
 		t.Errorf("Wrong response: %q (%d)", text, len(text))
 	}
 }
@@ -46,7 +46,7 @@ func TestHttpPost(t *testing.T) {
 
 	s := NewServer()
 	s.CookieName = "test"
-	s.RegisterWithName("x", StubCalck2{})
+	s.Register("x", StubCalck2{})
 	s.ServeHTTP(w, r)
 
 	res := w.Result()
@@ -79,7 +79,7 @@ func TestHttpPostDI(t *testing.T) {
 
 	s := NewServer()
 	s.CookieName = "test"
-	s.RegisterWithName("x", StubCalck2{})
+	s.Register("x", StubCalck2{})
 	s.ServeHTTP(w, r)
 
 	res := w.Result()
@@ -120,7 +120,7 @@ func TestHttpApiDI(t *testing.T) {
 
 	text, _ := ioutil.ReadAll(res.Body)
 
-	if len(text) != 2069 {
+	if len(text) != 2231 {
 		t.Errorf("Wrong response: %v (%d)", string(text), len(text))
 	}
 }

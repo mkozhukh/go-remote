@@ -41,7 +41,7 @@ func compareJSON(actualString string, expectedString string) bool {
 
 func TestNewServer(t *testing.T) {
 	c := NewServer()
-	text, _ := c.toJSONString("1", nil)
+	text, _ := c.toJSONString("1", nil, nil)
 	if string(text) != `{ "api":{ }, "data":{}, "key":"1", "version":1}` {
 		t.Errorf("Incorrect version serialization, %s", text)
 	}
@@ -62,7 +62,7 @@ func TestRegisterData(t *testing.T) {
 	c.RegisterConstant("test2", someData)
 	c.RegisterConstant("test3", &someData)
 
-	text, _ := c.toJSONString("1", nil)
+	text, _ := c.toJSONString("1", nil, nil)
 	if !compareJSON(string(text), `{ "api":{ }, "data":{"test1":123,"test2":{"Name":"Alex","Height":100},"test3":{"Name":"Alex","Height":100}}, "key":"1", "version":1}`) {
 		t.Errorf("Incorrect data serialization, %s", text)
 	}
@@ -71,10 +71,10 @@ func TestRegisterData(t *testing.T) {
 func TestRegisterName(t *testing.T) {
 	c := NewServer()
 
-	c.Register(StubCalck{})
-	c.RegisterWithName("c2", StubCalck{})
+	c.Register("", StubCalck{})
+	c.Register("c2", StubCalck{})
 
-	text, err := c.toJSONString("1", nil)
+	text, err := c.toJSONString("1", nil, nil)
 	if err != nil {
 		t.Error(err)
 		return
@@ -90,8 +90,8 @@ func TestProcessSingle(t *testing.T) {
 	c := []byte("[{ \"name\":\"StubCalck.Add\", \"args\":[2,3]}]")
 	s := NewServer()
 
-	s.Register(StubCalck{})
-	res := s.Process(c, nil)
+	s.Register("", StubCalck{})
+	res := s.Process(c, nil, nil)
 
 	if len(res) != 1 || res[0].Data.(int) != 5 {
 		t.Errorf("Incorrect api serialization, %+v", res)
@@ -102,8 +102,8 @@ func TestProcessMultiple(t *testing.T) {
 	c := []byte("[{ \"name\":\"StubCalck.Add\", \"args\":[2,3]}, { \"name\":\"StubCalck.Add\", \"args\":[-2,3]}]")
 	s := NewServer()
 
-	s.Register(StubCalck{})
-	res := s.Process(c, nil)
+	s.Register("", StubCalck{})
+	res := s.Process(c, nil, nil)
 
 	if len(res) != 2 ||
 		((res[0].Data.(int) != 5 || res[1].Data.(int) != 1) &&
@@ -116,8 +116,8 @@ func TestProcessComplex(t *testing.T) {
 	c := []byte("[{ \"name\":\"StubCalck.AddComplex\", \"args\":[{\"X\":100,\"Y\":200},3]}]")
 	s := NewServer()
 
-	s.Register(StubCalck{})
-	res := s.Process(c, nil)
+	s.Register("", StubCalck{})
+	res := s.Process(c, nil, nil)
 
 	if len(res) != 1 || res[0].Data.(StubResult).X != 103 || res[0].Data.(StubResult).Y != 203 {
 		t.Errorf("Incorrect call result, %+v", res)
@@ -139,8 +139,8 @@ func TestProcessError(t *testing.T) {
 	c := []byte("[{ \"name\":\"StubCalck.AddComplex\", \"args\":[{\"X\":100,\"Y\":200},0]}]")
 	s := NewServer()
 
-	s.Register(StubCalck{})
-	res := s.Process(c, nil)
+	s.Register("", StubCalck{})
+	res := s.Process(c, nil, nil)
 
 	if len(res) != 1 || res[0].Error != "Expected error" {
 		t.Errorf("Wrong error response %+v", res[0])
