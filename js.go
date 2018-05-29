@@ -73,24 +73,29 @@ var apiRawText = `(function(master, config){
 			body:JSON.stringify(pack)
 		}) 
 		: 
-		webix.ajax().headers(headers).post(url, pack)
+		webix.ajax().headers(headers).post(url, JSON.stringify(pack)).then(function(obj){ parseData(obj.json(), pack); });
 
-		data["catch"](function(){ return false; }).then(function(res){
-			var all = {};
-	
-			if (!res || !res.ok){
-				for (var i=0; i<pack.length; i++)
-					all[pack[i].id] = { error:"Network Error" };
-					result(queue, all)
+		data["catch"](function(){ return false; }).then(function(res){ 
+			if (res && res.ok){
+				res.json().then(function(data){ parseData(data, pack); });
 			} else {
-				res.json().then(function(data){
-					for (var i=0; i<data.length; i++)
-						all[data[i].id] = data[i];
-					result(queue, all)
-				});
+				parseData(false, pack);
 			}
+		});
+	}
 
-		})
+	function parseData(data, pack){
+		var all = {};
+
+		if (!data){
+			for (var i=0; i<pack.length; i++)
+				all[pack[i].id] = { error:"Network Error" };
+		} else {
+			for (var i=0; i<data.length; i++)
+				all[data[i].id] = data[i];
+		}
+
+		result(queue, all);
 	}
 	
 	function result(queue, all){
