@@ -29,7 +29,7 @@ func TestHttpRequestAPI(t *testing.T) {
 	}
 
 	text, _ := ioutil.ReadAll(res.Body)
-	if len(text) != 2208 {
+	if len(text) != 2470 {
 		t.Errorf("Wrong response: %q (%d)", text, len(text))
 	}
 }
@@ -120,7 +120,7 @@ func TestHttpApiDI(t *testing.T) {
 
 	text, _ := ioutil.ReadAll(res.Body)
 
-	if len(text) != 2231 {
+	if len(text) != 2493 {
 		t.Errorf("Wrong response: %v (%d)", string(text), len(text))
 	}
 }

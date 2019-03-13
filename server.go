@@ -39,7 +39,7 @@ func (l defaultLogger) Errorf(format string, args ...interface{}) {
 }
 
 func (l defaultLogger) Debugf(format string, args ...interface{}) {
-	fmt.Printf("DEBUG: "+format+"\n", args...)
+	// fmt.Printf("DEBUG: "+format+"\n", args...)
 }
 
 // SetLogger allows to set default package logger
