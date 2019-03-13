@@ -173,12 +173,14 @@ func (s *Server) toJSONString(key string, req *http.Request, w http.ResponseWrit
 		if value.isConstant {
 			jsonValue, err = json.Marshal(value.value)
 		} else {
-			raw, err := s.dependencies.Value(&value.rtype, req, w)
+			var raw reflect.Value
+			raw, err = s.dependencies.Value(&value.rtype, req, w)
 			if err == nil {
 				jsonValue, err = json.Marshal(raw.Interface())
 			}
 		}
 		if err != nil {
+			log.Errorf("%s", err.Error())
 			return "", err
 		}
 		if comma {
