@@ -69,6 +69,12 @@ func valueByType(atype reflect.Type, i int, thecall *callInfo) (reflect.Value, e
 }
 
 func (s *service) Call(thecall *callInfo, res *Response) {
+	defer func() {
+		if r := recover(); r != nil {
+			res.Error = "Method call error"
+		}
+	}()
+
 	var err error
 
 	if s.guard != nil && !s.guard(thecall.request) {
