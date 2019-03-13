@@ -82,6 +82,10 @@ var apiRawText = `(function(master, config){
 				parseData(false, pack);
 			}
 		});
+
+		if (master.onload){
+			master.onload(data);
+		}
 	}
 
 	function parseData(data, pack){
@@ -103,9 +107,11 @@ var apiRawText = `(function(master, config){
 			var test = queue[i];
 			var check = all[test.data.id];
 			if (check){
-				if (check.error)
+				if (check.error){
 					test.reject(check.error);
-				else
+					if (master.onerror)
+						master.onerror(check.error);
+				} else
 					test.resolve(check.data);
 
 				queue.splice(i, 1);

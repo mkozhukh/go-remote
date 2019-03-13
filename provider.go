@@ -40,7 +40,6 @@ func (d *dataProvider) Add(provider interface{}) error {
 
 func (d *dataProvider) Value(rtype *reflect.Type, req *http.Request, w http.ResponseWriter) (reflect.Value, error) {
 	test, ok := d.data[*rtype]
-	log.Debugf("%v+", *rtype)
 	if !ok {
 		return reflect.Value{}, errors.New("Missed parameter in method call")
 	}
