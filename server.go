@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"reflect"
@@ -22,29 +23,6 @@ type Server struct {
 	services     map[string]*service
 	data         map[string]dataRecord
 	dependencies dataProvider
-}
-
-var log Logger = defaultLogger{}
-
-// Logger object, logrus interface is used by default
-type Logger interface {
-	Errorf(string, ...interface{})
-	Debugf(string, ...interface{})
-}
-
-type defaultLogger struct{}
-
-func (l defaultLogger) Errorf(format string, args ...interface{}) {
-	fmt.Printf("ERROR: "+format+"\n", args...)
-}
-
-func (l defaultLogger) Debugf(format string, args ...interface{}) {
-	// fmt.Printf("DEBUG: "+format+"\n", args...)
-}
-
-// SetLogger allows to set default package logger
-func SetLogger(logger Logger) {
-	log = logger
 }
 
 // NewServer creates a new Server instance
@@ -216,7 +194,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "GET" {
-		s.serveAPI(w, r, token.Value)
+		ctype := r.Header.Get("Content-type")
+		if ctype == "application/json" {
+			s.jsonAPI(w, r, token.Value)
+		} else {
+			s.jsAPI(w, r, token.Value)
+		}
 		return
 	}
 
@@ -253,10 +236,16 @@ func (s *Server) serveError(w http.ResponseWriter, err error) {
 	http.Error(w, text, 500)
 }
 
-func (s *Server) serveAPI(w http.ResponseWriter, req *http.Request, token string) {
+func (s *Server) jsAPI(w http.ResponseWriter, req *http.Request, token string) {
 	w.Header().Set("Content-type", "text/plain")
 	api, _ := s.toJSONString(token, req, w)
 	apiText(w, "remote", api)
+}
+
+func (s *Server) jsonAPI(w http.ResponseWriter, req *http.Request, token string) {
+	w.Header().Set("Content-type", "application/json")
+	api, _ := s.toJSONString(token, req, w)
+	io.WriteString(w, api)
 }
 
 func (s *Server) serveJSON(w http.ResponseWriter, res []Response) {
