@@ -1,8 +1,8 @@
 package remote
 
 import (
-	"bytes"
-	"fmt"
+	"encoding/json"
+	"errors"
 	"reflect"
 	"unicode"
 	"unicode/utf8"
@@ -10,114 +10,110 @@ import (
 
 var typeOfError = reflect.TypeOf((*error)(nil)).Elem()
 
-type methodType struct {
-	method   reflect.Method
-	inTypes  []reflect.Type
-	outTypes []reflect.Type
+type serviceProvider struct {
+	*provider
+
+	methods  map[string]*providerInfo
+	services map[string]*serviceProvider
 }
 
-type service struct {
-	name   string        // name of service
-	rcvr   reflect.Value // receiver of methods for the service
-	typ    reflect.Type  // type of the receiver
-	guard  Guard
-	method map[string]*methodType // registered methods
+func newServiceProvider(di *provider) *serviceProvider {
+	t := serviceProvider{}
+	t.provider = di
+
+	t.methods = make(map[string]*providerInfo)
+	t.services = make(map[string]*serviceProvider)
+
+	return &t
 }
 
-// MarshalJSON converts object to JSON struct
-func (s *service) MarshalJSON() ([]byte, error) {
-	buffer := bytes.NewBufferString("{")
+func (s *serviceProvider) Add(name string, source interface{}, guard interface{}) {
 
-	comma := false
-	for key := range s.method {
-		if comma {
-			buffer.WriteString(",")
-		}
-		buffer.WriteString(fmt.Sprintf("%q:1", key))
-		comma = true
-	}
-
-	buffer.WriteString("}")
-	return buffer.Bytes(), nil
-}
-
-func valueByType(atype reflect.Type, i int, thecall *callInfo) (reflect.Value, error) {
-	var argv reflect.Value
-
-	if i >= len(thecall.Args) {
-		return thecall.dependencies.Value(&atype, thecall.request, thecall.writer)
-	}
-
-	// Decode the argument value
-	argIsValue := false // if true, need to indirect before calling.
-	if atype.Kind() == reflect.Ptr {
-		argv = reflect.New(atype.Elem())
+	if reflect.ValueOf(source).Kind() == reflect.Func {
+		vtype := reflect.TypeOf(source)
+		value := reflect.ValueOf(source)
+		s.methods[name] = s.getProviderInfo(vtype, value, guard)
 	} else {
-		argv = reflect.New(atype)
-		argIsValue = true
-	}
+		value := reflect.ValueOf(source)
+		if value.Kind() != reflect.Ptr {
+			if value.Kind() != reflect.Struct {
+				log.Fatalf("Not supported service type for %s, %+v", name, source)
+			}
+		} else {
+			value := reflect.Indirect(value)
+			if value.Kind() != reflect.Struct {
+				log.Fatalf("Not supported service type for %s, %+v", name, source)
+			}
+		}
 
-	// argv guaranteed to be a pointer now.
-	if err := thecall.ReadArgument(i, argv.Interface()); err != nil {
-		return argv, err
-	}
-	if argIsValue {
-		argv = argv.Elem()
-	}
+		t := newServiceProvider(s.provider)
 
-	return argv, nil
+		vtype := value.Type()
+		if name == "" {
+			name = vtype.Name()
+		}
+
+		t.suitableMethods(vtype, &value, guard)
+		s.services[name] = t
+	}
 }
 
-func (s *service) Call(thecall *callInfo, res *Response) {
+// ToJSON converts object to JSON struct
+func (s *serviceProvider) ToJSON() ([]byte, error) {
+	all := make(map[string][]byte)
+	for key := range s.methods {
+		all[key] = []byte{0x31}
+	}
+
+	for key := range s.services {
+		all[key], _ = s.services[key].ToJSON()
+	}
+
+	return json.Marshal(all)
+}
+
+func (s *serviceProvider) Value(thecall *callInfo) (data interface{}, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			res.Error = "Method call error"
+			err = errors.New("panic occurs")
 		}
 	}()
 
-	var err error
+	log.Debugf("%s %+v", thecall.Name, s.methods)
 
-	if s.guard != nil && !s.guard(thecall.request) {
-		res.Error = "Access Denied"
-		return
+	afunc, ok := s.methods[thecall.Name]
+	if ok {
+		return s.callAndResolve(afunc, thecall)
 	}
 
-	mtype, ok := s.method[thecall.Method()]
-	if !ok {
-		res.Error = "Invalid method name"
-		log.Debugf(res.Error)
-		return
+	objname := thecall.SplitName()
+	aobj, ok := s.services[objname]
+	if ok {
+		return aobj.Value(thecall)
 	}
 
-	argv := make([]reflect.Value, len(mtype.inTypes))
-	//replyv := make([]reflect.Value, len(mtype.outTypes))
-	argv[0] = s.rcvr
-	for i := 1; i < len(mtype.inTypes); i++ {
-		argv[i], err = valueByType(mtype.inTypes[i], i-1, thecall)
-		if err != nil {
-			res.Error = err.Error()
-			log.Debugf("Invalid arguments, %s", err.Error())
-			return
-		}
-	}
+	return reflect.Value{}, errors.New("unknown method")
+}
 
-	// Invoke the method
-	returnValues := mtype.method.Func.Call(argv)
+func (s *serviceProvider) callAndResolve(method *providerInfo, thecall callState) (interface{}, error) {
+	var out interface{}
 
-	var outResult interface{}
-	for i := 0; i < len(mtype.outTypes); i++ {
-		if mtype.outTypes[i] == typeOfError {
-			errResult := returnValues[i].Interface()
-			if errResult != nil {
-				res.Error = errResult.(error).Error()
-				return
+	data, err := s.call(method, thecall)
+	if err == nil {
+		count := method.vtype.NumOut()
+		for i := 0; i < count; i++ {
+			if method.vtype.Out(i) == typeOfError {
+				errResult := data[i].Interface()
+				if errResult != nil {
+					err = errResult.(error)
+				}
+			} else {
+				out = data[i].Interface()
 			}
-		} else {
-			outResult = returnValues[i].Interface()
 		}
 	}
 
-	res.Data = outResult
+	return out, err
 }
 
 // Is this an exported - upper case - name?
@@ -136,23 +132,8 @@ func isExportedOrBuiltinType(t reflect.Type) bool {
 	return isExported(t.Name()) || t.PkgPath() == ""
 }
 
-// creates a new service object
-func newService(rcvr interface{}, guard Guard) *service {
-	s := new(service)
-	s.typ = reflect.TypeOf(rcvr)
-	s.rcvr = reflect.ValueOf(rcvr)
-	s.name = reflect.Indirect(s.rcvr).Type().Name()
-	s.guard = guard
-
-	// install the methods
-	s.method = suitableMethods(s.typ, true)
-
-	return s
-}
-
 // check all methods on an object and return public ones
-func suitableMethods(typ reflect.Type, reportErr bool) map[string]*methodType {
-	methods := make(map[string]*methodType)
+func (s serviceProvider) suitableMethods(typ reflect.Type, value *reflect.Value, guard interface{}) {
 	for m := 0; m < typ.NumMethod(); m++ {
 		method := typ.Method(m)
 		mtype := method.Type
@@ -172,18 +153,19 @@ func suitableMethods(typ reflect.Type, reportErr bool) map[string]*methodType {
 			argType := mtype.In(i)
 			inTypes[i] = argType
 			if !isExportedOrBuiltinType(argType) {
-				log.Errorf(mname, "argument type not exported:", argType)
+				log.Fatalf("[remote] argument type not exported for method %s", mname)
 			}
 		}
 		for i := 0; i < out; i++ {
 			argType := mtype.Out(i)
 			outTypes[i] = argType
 			if !isExportedOrBuiltinType(argType) {
-				log.Errorf(mname, "result type not exported:", argType)
+				log.Fatalf("[remote] result type not exported for method %s", mname)
 			}
 		}
 
-		methods[mname] = &methodType{method, inTypes, outTypes}
+		info := s.getProviderInfo(method.Type, method.Func, guard)
+		info.object = value
+		s.methods[mname] = info
 	}
-	return methods
 }

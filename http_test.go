@@ -45,8 +45,8 @@ func TestHttpPost(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	s := NewServer()
-	s.CookieName = "test"
-	s.Register("x", StubCalck2{})
+	s.cookie = "test"
+	s.AddMethod("x", StubCalck2{})
 	s.ServeHTTP(w, r)
 
 	res := w.Result()
@@ -78,8 +78,8 @@ func TestHttpPostDI(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	s := NewServer()
-	s.CookieName = "test"
-	s.Register("x", StubCalck2{})
+	s.cookie = "test"
+	s.AddMethod("x", StubCalck2{})
 	s.ServeHTTP(w, r)
 
 	res := w.Result()
@@ -107,9 +107,9 @@ func TestHttpApiDI(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	s := NewServer()
-	s.RegisterConstant("a", 12)
-	s.RegisterProvider(getUserStruct)
-	s.RegisterVariable("b", &userStruct{})
+	s.AddVariable("a", 12)
+	s.AddProvider(getUserStruct)
+	s.AddVariable("b", getUserStruct)
 	s.ServeHTTP(w, r)
 
 	res := w.Result()

@@ -20,17 +20,17 @@ func TestReadArgument(t *testing.T) {
 	str := ""
 	strct := someStruct{}
 
-	c.ReadArgument(0, &str)
+	c.NextArgument(&str)
 	if str != "a" {
 		t.Error("Can't parse string argument")
 	}
 
-	c.ReadArgument(1, &num)
+	c.NextArgument(&num)
 	if num != 12 {
 		t.Error("Can't parse number argument")
 	}
 
-	c.ReadArgument(2, &strct)
+	c.NextArgument(&strct)
 	if strct.Height != 100 || strct.Name != "Alex" {
 		t.Error("Can't parse struct argument")
 	}

@@ -2,7 +2,6 @@ package remote
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 )
@@ -18,38 +17,52 @@ type Response struct {
 }
 
 type callInfo struct {
+	innerCallInfo
+
 	ID   string            `json:"id"`
 	Name string            `json:"name"`
 	Args []json.RawMessage `json:"args"`
 
-	dependencies *dataProvider
-	request      *http.Request
-	writer       http.ResponseWriter
-	service      string
-	method       string
+	index int
 }
 
 // ReadArgument fills the request object for the RPC method.
-func (c *callInfo) ReadArgument(index int, args interface{}) error {
-	if index >= len(c.Args) {
-		return errors.New("Invalid number of parameters")
+func (c *callInfo) NextArgument(args interface{}) error {
+	if c.index >= len(c.Args) {
+		return nil
 	}
 
-	return json.Unmarshal(c.Args[index], args)
+	err := json.Unmarshal(c.Args[c.index], args)
+	c.index++
+
+	return err
 }
 
-func (c *callInfo) parseName() {
+func (c *callInfo) SplitName() string {
 	parts := strings.Split(c.Name, ".")
-	c.service = parts[0]
-	c.method = parts[1]
+
+	if len(parts) == 1 {
+		return "";
+	}
+
+	c.Name = parts[1]
+	return parts[0]
 }
 
-func (c *callInfo) Service() string {
-	c.parseName()
-	return c.service
+
+
+type innerCallInfo struct {
+	request *http.Request
+}
+func (c *innerCallInfo) Request() *http.Request{
+	return c.request
+}
+// ReadArgument fills the request object for the RPC method.
+func (c *innerCallInfo) NextArgument(args interface{}) error {
+	return nil
 }
 
-func (c *callInfo) Method() string {
-	c.parseName()
-	return c.method
+type callState interface {
+	Request() *http.Request
+	NextArgument(args interface{}) error
 }

@@ -1,0 +1,1 @@
+module mkozhukh/go-remote
