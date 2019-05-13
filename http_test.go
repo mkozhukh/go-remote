@@ -29,7 +29,7 @@ func TestHttpRequestAPI(t *testing.T) {
 	}
 
 	text, _ := ioutil.ReadAll(res.Body)
-	if len(text) != 2470 {
+	if len(text) < 2000 {
 		t.Errorf("Wrong response: %q (%d)", text, len(text))
 	}
 }
@@ -107,7 +107,7 @@ func TestHttpApiDI(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	s := NewServer()
-	s.AddVariable("a", 12)
+	s.AddVariable("a", func() int{ return 12 })
 	s.AddProvider(getUserStruct)
 	s.AddVariable("b", getUserStruct)
 	s.ServeHTTP(w, r)
@@ -120,7 +120,7 @@ func TestHttpApiDI(t *testing.T) {
 
 	text, _ := ioutil.ReadAll(res.Body)
 
-	if len(text) != 2493 {
+	if len(text) < 2000 {
 		t.Errorf("Wrong response: %v (%d)", string(text), len(text))
 	}
 }

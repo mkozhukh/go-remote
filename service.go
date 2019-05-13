@@ -1,9 +1,10 @@
 package remote
 
 import (
-	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
+	"runtime/debug"
 	"unicode"
 	"unicode/utf8"
 )
@@ -28,7 +29,6 @@ func newServiceProvider(di *provider) *serviceProvider {
 }
 
 func (s *serviceProvider) Add(name string, source interface{}, guard interface{}) {
-
 	if reflect.ValueOf(source).Kind() == reflect.Func {
 		vtype := reflect.TypeOf(source)
 		value := reflect.ValueOf(source)
@@ -37,12 +37,12 @@ func (s *serviceProvider) Add(name string, source interface{}, guard interface{}
 		value := reflect.ValueOf(source)
 		if value.Kind() != reflect.Ptr {
 			if value.Kind() != reflect.Struct {
-				log.Fatalf("Not supported service type for %s, %+v", name, source)
+				log.Fatalf("not supported service type for %s, %+v", name, source)
 			}
 		} else {
 			value := reflect.Indirect(value)
 			if value.Kind() != reflect.Struct {
-				log.Fatalf("Not supported service type for %s, %+v", name, source)
+				log.Fatalf("not supported service type for %s, %+v", name, source)
 			}
 		}
 
@@ -58,28 +58,34 @@ func (s *serviceProvider) Add(name string, source interface{}, guard interface{}
 	}
 }
 
-// ToJSON converts object to JSON struct
-func (s *serviceProvider) ToJSON() ([]byte, error) {
-	all := make(map[string][]byte)
+// ToHashMap generates raw hash, which can be used for json conversion
+func (s *serviceProvider) ToHashMap(state callState) map[string]interface{} {
+	all := make(map[string]interface{})
+
 	for key := range s.methods {
-		all[key] = []byte{0x31}
+		if state == nil {
+			// api mode, just provide info about existing structures
+			all[key] = 1
+		} else {
+			// data mode, calculate all values
+			all[key], _ = s.callAndResolve(s.methods[key], state)
+		}
 	}
 
 	for key := range s.services {
-		all[key], _ = s.services[key].ToJSON()
+		all[key] = s.services[key].ToHashMap(state)
 	}
 
-	return json.Marshal(all)
+	return all
 }
 
 func (s *serviceProvider) Value(thecall *callInfo) (data interface{}, err error) {
 	defer func() {
 		if r := recover(); r != nil {
+			fmt.Println("stacktrace from panic: \n" + string(debug.Stack()))
 			err = errors.New("panic occurs")
 		}
 	}()
-
-	log.Debugf("%s %+v", thecall.Name, s.methods)
 
 	afunc, ok := s.methods[thecall.Name]
 	if ok {

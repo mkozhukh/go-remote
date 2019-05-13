@@ -42,7 +42,7 @@ func compareJSON(actualString string, expectedString string) bool {
 func TestNewServer(t *testing.T) {
 	c := NewServer()
 	text, _ := c.toJSONString("1", nil, nil)
-	if string(text) != `{ "api":{ }, "data":{}, "key":"1", "version":1}` {
+	if string(text) != `{"api":{},"data":{},"key":"1","version":1}` {
 		t.Errorf("Incorrect version serialization, %s", text)
 	}
 }
@@ -59,13 +59,14 @@ func TestRegisterData(t *testing.T) {
 	c.AddVariable("test2", func() interface{} { return someData })
 	c.AddVariable("test3", func() interface{} { return &someData })
 
-	text, err := c.vars.ToJSON(nil)
+	raw := c.vars.ToHashMap(&innerCallInfo{nil})
+	text, err := json.Marshal(raw)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	if !compareJSON(string(text), `{ "api":{ }, "data":{"test1":123,"test2":{"Name":"Alex","Height":100},"test3":{"Name":"Alex","Height":100}}, "key":"1", "version":1}`) {
+	if !compareJSON(string(text), `{"test1":123,"test2":{"Name":"Alex","Height":100},"test3":{"Name":"Alex","Height":100}}`) {
 		t.Errorf("Incorrect data serialization, %s", text)
 	}
 }
@@ -76,13 +77,14 @@ func TestRegisterName(t *testing.T) {
 	c.AddMethod("", StubCalck{})
 	c.AddMethod("c2", StubCalck{})
 
-	text, err := c.methods.ToJSON()
+	raw := c.methods.ToHashMap(nil)
+	text, err := json.Marshal(raw)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	expected := `{ "api":{ "StubCalck":{"Add":1,"AddComplex":1},"c2":{"Add":1,"AddComplex":1}}, "data":{}, "key":"1", "version":1}`
+	expected := `{"StubCalck":{"Add":1,"AddComplex":1},"c2":{"Add":1,"AddComplex":1}}`
 	if !compareJSON(string(text), expected) {
 		t.Errorf("Incorrect api serialization\n%s\n%s", text, expected)
 	}

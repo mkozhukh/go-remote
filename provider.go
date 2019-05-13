@@ -48,7 +48,7 @@ func (d *provider) getProviderInfo(pType reflect.Type, value reflect.Value, guar
 	if guard != nil {
 		gType := reflect.TypeOf(guard)
 
-		if gType.NumOut() != 1  || pType.Out(0).Kind() != reflect.Bool {
+		if gType.NumOut() != 1  || gType.Out(0).Kind() != reflect.Bool {
 			log.Fatalf("invalid guard")
 		}
 
@@ -78,7 +78,7 @@ func (s *provider) call(method *providerInfo, thecall callState) ([]reflect.Valu
 		return nil, errors.New("access denied")
 	}
 
-	data, err := s.resolve(&method.value, thecall)
+	data, err := s.resolve(&method.value, method.object, thecall)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func (s *provider) call(method *providerInfo, thecall callState) ([]reflect.Valu
 }
 
 func (d *provider) checkGuard(rtype *reflect.Value, state callState) bool {
-	data, err := d.resolve(rtype, state)
+	data, err := d.resolve(rtype, nil, state)
 	if err != nil || !data[0].Bool() {
 		return false
 	}
@@ -95,17 +95,24 @@ func (d *provider) checkGuard(rtype *reflect.Value, state callState) bool {
 	return true
 }
 
-func (d *provider) resolve(rtype *reflect.Value, state callState) ([]reflect.Value, error) {
+func (d *provider) resolve(rtype *reflect.Value, otype *reflect.Value, state callState) ([]reflect.Value, error) {
 	signature := rtype.Type()
 	count := signature.NumIn()
 
 	args := make([]reflect.Value, 0, count)
-	for i := range args {
+	for i := 0; i<count; i++ {
+		// reference to the master object
+		if i == 0 && otype != nil {
+			args = append(args, *otype)
+			continue
+		}
+
 		intype := signature.In(i)
 
 		//request
 		if intype == requestType {
 			args = append(args, reflect.ValueOf(state.Request()))
+			continue
 		}
 
 		//from provider
@@ -116,6 +123,7 @@ func (d *provider) resolve(rtype *reflect.Value, state callState) ([]reflect.Val
 				return nil, errors.New("can't resolve dependency")
 			}
 			args = append(args, val[0])
+			continue
 		}
 
 		//from the call

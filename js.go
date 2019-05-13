@@ -5,22 +5,50 @@ import (
 	"text/template"
 )
 
-var apiRawText = `(function(master, config){
+var apiRawText = `
+(function(){
 
-	var scs = document.getElementsByTagName("script");
-	var url = scs[scs.length-1].getAttribute("src");
-	scs = null;
+var scs = document.getElementsByTagName("script");
+var url = scs[scs.length-1].getAttribute("src");
+scs = null;
+
+
+
+(function (root) {
+	if (typeof exports === 'object') {
+        // Node, CommonJS-like
+        module.exports = Remote;
+    } else {
+        // Browser globals (root is window)
+       	root.remote = Remote;
+    }
+}(this));
+
+
+function Remote(config){
+	if (typeof config === "string")	{
+		return fetchConfig(config).then(function(cfg){
+			return cfg.json();
+		}).then(function(cfg){
+			return Remote(cfg).active;
+		});
+	}
+
+	var master = { version: config.version };
+
+	var url = config.url;
+	var csrf = config.key;
 
 	var queue = [];
 	var seed = 1;
-	var csrf = config.key;
+	var socket = null;
 	
-	master.data = master.data||{};
-	master.api = master.api||{};
-	master.version = config.version;
 
+	master.data = {};
 	for (var key in config.data)
 		master.data[key] = config.data[key];
+	
+	master.api = {};
 	for (var key in config.api){
 		var obj = {};
 		var cfg = config.api[key];
@@ -28,6 +56,57 @@ var apiRawText = `(function(master, config){
 			obj[method] = wrapper(key+"."+method);
 		master.api[key] = obj;
 	}
+
+	if (config.websocket && window.WebSocket){
+		master.active = new Promise(function(res){
+			const sbs = {};
+			const and = config.websocket.indexOf("?")!=-1?"&":"?";
+			socket = new WebSocket(config.websocket+and+"key="+csrf);
+			socket.addEventListener('message', function (ev) {
+				const pack = JSON.parse(ev.data);
+				if (pack.action === "result")
+					parseData(pack.data, []);
+				else if (pack.action === "event")
+					triggerEvent(pack.data)
+				else if (pack.action == "active")
+						res(master);
+				else {
+					if (master.onerror)
+						master.onerror(pack.data || "WebSocket error");
+				}
+			});
+
+			function triggerEvent(data){
+				const all = sbs[data.name];
+
+				if (all){
+					for (var i=0; i<all.length; i++)
+						all[i].handler(data.data);
+				}
+			}
+			master.attachEvent = function(name, handler){
+				const id = uid();
+				const all = sbs[name] = sbs[name] || [];
+				all.push({ id:id, handler:handler });
+
+				socket.send(JSON.stringify({ action:"subscribe", name }));
+				return { name,id };
+			};
+			master.detachEvent = function(pack){
+				let all = sbs[pack.name];
+				if (all) all = sbs[pack.name] = all.filter(a => a.id != pack.id);
+				if (!all.lenght){
+					delete sbs[pack.id];
+					socket.send(JSON.stringify({ action:"unsubscribe", name }));
+				}
+			};
+			master.on = { attachEvent : master.attachEvent, detachEvent:master.detachEvent };
+		});
+	} else {
+		master.active = Promise.resolve(master);
+	}
+
+
 	
 	function uid(){
 		return (seed++).toString();
@@ -59,6 +138,9 @@ var apiRawText = `(function(master, config){
 		});
 
 		if (!pack.length) return;
+		if (socket){
+			return socket.send(JSON.stringify({ action:"remote", body:pack }));
+		}
 		
 		var headers = {
 			'Accept': 'application/json',
@@ -86,6 +168,15 @@ var apiRawText = `(function(master, config){
 		if (master.onload){
 			master.onload(data);
 		}
+	}
+
+	function fetchConfig(url){
+		var headers = { 'Accept': 'application/json' };
+
+		return window.fetch ?
+			fetch(url, { credentials: "include", headers:headers})
+			:
+			webix.ajax().headers(headers).get(url);
 	}
 
 	function parseData(data, pack){
@@ -118,7 +209,18 @@ var apiRawText = `(function(master, config){
 			}
 		}
 	}
-})((window.{{.Name}} = window.{{.Name}} || {}), {{.Config}})`
+
+	return master;
+}
+
+
+var config = {{.Config}};
+config.url = config.url || url;
+window.{{.Name}} = Remote(config);
+}).call({});
+
+`
+
 
 var tmpl, _ = template.New("api").Parse(apiRawText)
 

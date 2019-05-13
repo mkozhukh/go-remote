@@ -12,7 +12,7 @@ type Guard = func(r *http.Request) bool
 
 type apiState struct {
 	methods *serviceProvider
-	vars    *dataProvider
+	vars    *serviceProvider
 	di      *provider
 
 	version int
@@ -28,9 +28,11 @@ type Server struct {
 // NewServer creates a new Server instance
 func NewServer() *Server {
 	s := Server{}
+	s.apiState = &apiState{}
+
 	s.di = newProvider()
 	s.methods = newServiceProvider(s.di)
-	s.vars = newDataProvider(s.di)
+	s.vars = newServiceProvider(s.di)
 
 	s.version = 1
 	s.cookie = "remote-" + randString(8)
@@ -59,7 +61,7 @@ func (s *Server) AddProvider(provider interface{}) error {
 
 // RegisterVariable adds a variable data to the API
 func (s *Server) AddVariable(name string, rcvr interface{}) {
-	s.vars.Add(name, rcvr, false)
+	s.vars.Add(name, rcvr, nil)
 }
 
 // Process starts the package processing, executing all requested methods
@@ -103,15 +105,8 @@ func (s *Server) Call(call *callInfo, res chan *Response) {
 func (s *Server) toJSONString(key string, req *http.Request, w http.ResponseWriter) ([]byte, error) {
 	api := make(map[string]interface{})
 
-	methods, err := s.methods.ToJSON()
-	if err != nil {
-		return nil, err
-	}
-
-	vars, err := s.vars.ToJSON(&innerCallInfo{req})
-	if err != nil {
-		return nil, err
-	}
+	methods := s.methods.ToHashMap(nil)
+	vars := s.vars.ToHashMap(&innerCallInfo{req})
 
 	api["api"] = methods
 	api["data"] = vars
