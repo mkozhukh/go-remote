@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
+	"runtime/debug"
 	"unicode"
 	"unicode/utf8"
 )
@@ -71,6 +72,7 @@ func valueByType(atype reflect.Type, i int, thecall *callInfo) (reflect.Value, e
 func (s *service) Call(thecall *callInfo, res *Response) {
 	defer func() {
 		if r := recover(); r != nil {
+			log.Errorf(string(debug.Stack()))
 			res.Error = "Method call error"
 		}
 	}()
