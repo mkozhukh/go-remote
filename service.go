@@ -1,8 +1,6 @@
-package remote
+package go_remote
 
 import (
-	"bytes"
-	"fmt"
 	"reflect"
 	"runtime/debug"
 	"unicode"
@@ -25,28 +23,11 @@ type service struct {
 	method map[string]*methodType // registered methods
 }
 
-// MarshalJSON converts object to JSON struct
-func (s *service) MarshalJSON() ([]byte, error) {
-	buffer := bytes.NewBufferString("{")
-
-	comma := false
-	for key := range s.method {
-		if comma {
-			buffer.WriteString(",")
-		}
-		buffer.WriteString(fmt.Sprintf("%q:1", key))
-		comma = true
-	}
-
-	buffer.WriteString("}")
-	return buffer.Bytes(), nil
-}
-
 func valueByType(atype reflect.Type, i int, thecall *callInfo) (reflect.Value, error) {
 	var argv reflect.Value
 
 	if i >= len(thecall.Args) {
-		return thecall.dependencies.Value(&atype, thecall.request, thecall.writer)
+		return thecall.dependencies.Value(atype, thecall.ctx)
 	}
 
 	// Decode the argument value
@@ -59,7 +40,7 @@ func valueByType(atype reflect.Type, i int, thecall *callInfo) (reflect.Value, e
 	}
 
 	// argv guaranteed to be a pointer now.
-	if err := thecall.ReadArgument(i, argv.Interface()); err != nil {
+	if err := thecall.readArgument(i, argv.Interface()); err != nil {
 		return argv, err
 	}
 	if argIsValue {
@@ -79,12 +60,12 @@ func (s *service) Call(thecall *callInfo, res *Response) {
 
 	var err error
 
-	if s.guard != nil && !s.guard(thecall.request) {
+	if s.guard != nil && !s.guard(thecall.ctx) {
 		res.Error = "Access Denied"
 		return
 	}
 
-	mtype, ok := s.method[thecall.Method()]
+	mtype, ok := s.method[thecall.method]
 	if !ok {
 		res.Error = "Invalid method name"
 		log.Debugf(res.Error)
