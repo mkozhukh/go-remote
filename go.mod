@@ -1,4 +1,4 @@
-module github.com/mkozhukh/go-remote.git
+module github.com/mkozhukh/go-remote
 
 go 1.13
 
