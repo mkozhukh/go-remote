@@ -24,43 +24,45 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	token := ctx.Value(TokenValue)
 	strToken, ok := token.(string)
 
-	requestToken := r.Header.Get("Remote-Key")
-	isAPIListing := r.Method == "GET" && r.URL.Query().Get("ws") == ""
+	isSocketStart := r.Method == "GET" && r.URL.Query().Get("ws") != ""
+	if r.Method == "GET" && !isSocketStart {
+		if strToken == "" && !s.config.WithoutKey {
+			strToken = randString(16)
+			ctx = context.WithValue(ctx, TokenValue, strToken)
+			s.Context.ToResponse(w, ctx, TokenValue)
+		}
+		serveJSON(w, s.GetAPI(ctx))
+		return
+	}
+
+	if !isSocketStart && r.Method != "POST" {
+		serveError(w, errors.New("only post and get request types are supported"))
+		return
+	}
+
+	var requestToken string
+	if isSocketStart {
+		requestToken = r.URL.Query().Get("key")
+	} else {
+		requestToken = r.Header.Get("Remote-Key")
+	}
 
 	// token is not defined or incorrect
-	if !isAPIListing && !s.config.WithoutKey && (requestToken == "" || !ok || strToken != requestToken) {
+	if !s.config.WithoutKey && (requestToken == "" || !ok || strToken != requestToken) {
 		log.Debugf("invalid key %q %q", strToken, requestToken)
 		serveError(w, errors.New("invalid key"))
 		return
 	}
 
-	if r.Method == "GET" {
-		if isAPIListing {
-			if strToken == "" && !s.config.WithoutKey {
-				strToken = randString(16)
-				ctx = context.WithValue(ctx, TokenValue, strToken)
-				s.Context.ToResponse(w, ctx, TokenValue)
-			}
-			serveJSON(w, s.GetAPI(ctx))
-			return
-		}
-
+	if isSocketStart {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			serveError(w, err)
 			return
-			//log.Errorf("socket upgrade error: %f", err)
 		}
 
 		client := Client{Server: s, conn: conn, Send: make(chan []byte, 256), ctx: ctx}
-		go client.writePump()
-		go client.readPump()
-		return
-
-	}
-
-	if r.Method != "POST" {
-		serveError(w, errors.New("only post and get request types are supported"))
+		go client.Start()
 		return
 	}
 

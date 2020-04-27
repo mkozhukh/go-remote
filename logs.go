@@ -1,6 +1,7 @@
 package go_remote
 
 import (
+	"fmt"
 	stdlog "log"
 )
 
@@ -24,5 +25,5 @@ func (l defaultLogger) Errorf(format string, args ...interface{}) {
 }
 
 func (l defaultLogger) Debugf(format string, args ...interface{}) {
-	// fmt.Printf("DEBUG: "+format+"\n", args...)
+	 fmt.Printf("DEBUG: "+format+"\n", args...)
 }

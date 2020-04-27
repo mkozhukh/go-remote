@@ -45,6 +45,11 @@ func NewServer(config *ServerConfig) *Server {
 	}
 
 	s.Events = newHub()
+
+	if s.config.WebSocket {
+		go s.Events.Run()
+	}
+
 	s.Dependencies = newDependencyStore()
 	s.Context = newContextStore()
 	return &s

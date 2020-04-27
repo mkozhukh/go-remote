@@ -16,6 +16,18 @@ type Client struct {
 	ctx  context.Context
 }
 
+type ResponseMessage struct {
+	Action string `json:"action"`
+	Body interface{} `json:"body,omitempty"`
+}
+
+type RequestMessage struct {
+	Action string `json:"action"`
+	Channel string `json:"channel"`
+	Body json.RawMessage `json:"body,omitempty"`
+}
+
+
 const pongWait = 60 * time.Second
 const pingPeriod = (pongWait * 9) / 10
 const maxMessageSize = 4000
@@ -26,9 +38,22 @@ var (
 	space   = []byte{' '}
 )
 
+
+func (c *Client) Start(){
+	go c.readPump()
+	go c.writePump()
+
+	c.SendMessage("start", nil)
+}
+
+func (c *Client) SendMessage(name string, body interface{}){
+	m, _ := json.Marshal(&ResponseMessage{Action:name, Body: body})
+	c.Send <- m
+}
+
 func (c *Client) readPump() {
 	defer func() {
-		c.Server.Events.Subscribe(Subscription{c, "", false})
+		c.Server.Events.UnSubscribe("", c)
 		c.conn.Close()
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
@@ -50,20 +75,37 @@ func (c *Client) readPump() {
 }
 
 func (c *Client) process(message []byte) {
-
-	res := c.Server.Process(message, c.ctx)
-	if len(res) < 1 {
-		log.Errorf("somehow process doesn't return results")
-		return
-	}
-
-	resText, err := json.Marshal(&res[0])
+	m := RequestMessage{}
+	err := json.Unmarshal(message, &m)
 	if err != nil {
-		log.Errorf("can't parse result to JSON", err)
+		log.Errorf("invalid message: %s", message)
+		log.Errorf(err.Error())
 		return
 	}
 
-	c.Send <- resText
+	if m.Action == "subscribe" {
+		c.Server.Events.Subscribe(m.Channel, c)
+	}
+
+	if m.Action == "unsubscribe" {
+		c.Server.Events.UnSubscribe(m.Channel, c)
+	}
+
+	if m.Action == "remote" {
+		res := c.Server.Process(m.Body, c.ctx)
+		if len(res) < 1 {
+			log.Errorf("somehow process doesn't return results")
+			return
+		}
+
+		resText, err := json.Marshal(&res)
+		if err != nil {
+			log.Errorf("can't parse result to JSON", err)
+			return
+		}
+
+		c.SendMessage("result", resText)
+	}
 }
 
 func (c *Client) writePump() {

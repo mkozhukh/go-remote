@@ -4,12 +4,12 @@ import (
 	"fmt"
 )
 
-type Message struct {
+type message struct {
 	Channel string
-	Content []byte
+	Content interface{}
 }
 
-type Subscription struct {
+type subscription struct {
 	Client  *Client
 	Channel string
 	Mode    bool
@@ -23,14 +23,14 @@ type Hub struct {
 	clients  map[*Client]bool
 	channels map[string]channel
 
-	publish   chan Message
-	subscribe chan Subscription
+	publish   chan message
+	subscribe chan subscription
 }
 
 func newHub() *Hub {
 	return &Hub{
-		publish:   make(chan Message),
-		subscribe: make(chan Subscription),
+		publish:   make(chan message),
+		subscribe: make(chan subscription),
 		channels:  make(map[string]channel),
 		clients:   make(map[*Client]bool),
 	}
@@ -47,15 +47,19 @@ func (h *Hub) Run() {
 	}
 }
 
-func (h *Hub) Subscribe(s Subscription) {
-	h.subscribe <- s
+func (h *Hub) Subscribe(channel string, c *Client) {
+	h.subscribe <- subscription{c, channel, true}
 }
 
-func (h *Hub) Publish(m Message) {
-	h.publish <- m
+func (h *Hub) UnSubscribe(channel string, c *Client) {
+	h.subscribe <- subscription{c, channel, false}
 }
 
-func (h *Hub) onSubscribe(sub *Subscription) {
+func (h *Hub) Publish(name string, data interface{}) {
+	h.publish <- message{Channel:name, Content: data}
+}
+
+func (h *Hub) onSubscribe(sub *subscription) {
 	ch, ok := h.channels[sub.Channel]
 	if !ok {
 		if !sub.Mode {
@@ -76,11 +80,11 @@ func (h *Hub) onSubscribe(sub *Subscription) {
 	}
 }
 
-func (h *Hub) onPublish(m *Message) {
+func (h *Hub) onPublish(m *message) {
 	ch, ok := h.channels[m.Channel]
 	if ok {
 		for c := range ch.clients {
-			c.Send <- m.Content
+			c.SendMessage("event", m.Content)
 		}
 	}
 }
