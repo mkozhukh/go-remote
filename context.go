@@ -9,7 +9,7 @@ type ContextProvider func(ctx context.Context, r *http.Request) context.Context
 type ContextReaction func(ctx context.Context, w http.ResponseWriter, key interface{})
 
 type contextStore struct {
-	order []ContextProvider
+	order    []ContextProvider
 	reaction []ContextReaction
 }
 

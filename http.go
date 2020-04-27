@@ -24,20 +24,20 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	token := ctx.Value(TokenValue)
 	strToken, ok := token.(string)
 
-	requestToken := r.Header.Get("Remote-CSRF")
+	requestToken := r.Header.Get("Remote-Key")
 	isAPIListing := r.Method == "GET" && r.URL.Query().Get("ws") == ""
 
 	// token is not defined or incorrect
-	if !isAPIListing && (requestToken == "" || !ok || strToken != requestToken) {
-		log.Debugf("Invalid token %q %q", strToken, requestToken)
-		serveError(w, errors.New("invalid CSRF token"))
+	if !isAPIListing && !s.config.WithoutKey && (requestToken == "" || !ok || strToken != requestToken) {
+		log.Debugf("invalid key %q %q", strToken, requestToken)
+		serveError(w, errors.New("invalid key"))
 		return
 	}
 
 	if r.Method == "GET" {
 		if isAPIListing {
-			if strToken == "" {
-				strToken = "test"
+			if strToken == "" && !s.config.WithoutKey {
+				strToken = randString(16)
 				ctx = context.WithValue(ctx, TokenValue, strToken)
 				s.Context.ToResponse(w, ctx, TokenValue)
 			}

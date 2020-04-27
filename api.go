@@ -7,9 +7,10 @@ import (
 
 type ServiceAPI map[string]int
 type API struct {
-	Services map[string]ServiceAPI `json:"api"`
-	Data     map[string]interface{}
-	Key      string
+	Services  map[string]ServiceAPI  `json:"api"`
+	Data      map[string]interface{} `json:"data"`
+	Key       string                 `json:"key"`
+	WebSocket bool                   `json:"websocket,omitempty"`
 }
 
 // JSON returns a json string representation of the end point
@@ -42,6 +43,10 @@ func (s *Server) GetAPI(ctx context.Context) API {
 				out.Data[key] = raw.Interface()
 			}
 		}
+	}
+
+	if s.config.WebSocket {
+		out.WebSocket = true
 	}
 
 	return out

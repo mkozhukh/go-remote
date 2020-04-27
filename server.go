@@ -14,10 +14,16 @@ type Guard = func(r context.Context) bool
 type Server struct {
 	services map[string]*service
 	data     map[string]dataRecord
+	config   *ServerConfig
 
 	Events       *Hub
 	Dependencies *dependencyStore
 	Context      *contextStore
+}
+
+type ServerConfig struct {
+	WebSocket  bool
+	WithoutKey bool
 }
 
 // Response handles results of remote calls
@@ -28,10 +34,15 @@ type Response struct {
 }
 
 // NewServer creates a new Server instance
-func NewServer() *Server {
+func NewServer(config *ServerConfig) *Server {
 	s := Server{}
 	s.services = make(map[string]*service)
 	s.data = make(map[string]dataRecord)
+	s.config = config
+
+	if s.config == nil {
+		s.config = &ServerConfig{}
+	}
 
 	s.Events = newHub()
 	s.Dependencies = newDependencyStore()
