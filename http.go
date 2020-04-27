@@ -1,6 +1,7 @@
 package go_remote
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -24,32 +25,38 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	strToken, ok := token.(string)
 
 	requestToken := r.Header.Get("Remote-CSRF")
+	isAPIListing := r.Method == "GET" && r.URL.Query().Get("ws") == ""
 
 	// token is not defined or incorrect
-	if requestToken == "" || !ok || strToken != requestToken {
+	if !isAPIListing && (requestToken == "" || !ok || strToken != requestToken) {
 		log.Debugf("Invalid token %q %q", strToken, requestToken)
 		serveError(w, errors.New("invalid CSRF token"))
 		return
 	}
 
 	if r.Method == "GET" {
-		ws := r.URL.Query().Get("ws")
-		if ws != "" {
-			conn, err := upgrader.Upgrade(w, r, nil)
-			if err != nil {
-				serveError(w, err)
-				return
-				//log.Errorf("socket upgrade error: %f", err)
+		if isAPIListing {
+			if strToken == "" {
+				strToken = "test"
+				ctx = context.WithValue(ctx, TokenValue, strToken)
+				s.Context.ToResponse(w, ctx, TokenValue)
 			}
-
-			client := Client{Server: s, conn: conn, Send: make(chan []byte, 256), ctx: ctx}
-			go client.writePump()
-			go client.readPump()
+			serveJSON(w, s.GetAPI(ctx))
 			return
 		}
 
-		serveJSON(w, s.GetAPI(ctx))
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			serveError(w, err)
+			return
+			//log.Errorf("socket upgrade error: %f", err)
+		}
+
+		client := Client{Server: s, conn: conn, Send: make(chan []byte, 256), ctx: ctx}
+		go client.writePump()
+		go client.readPump()
 		return
+
 	}
 
 	if r.Method != "POST" {
