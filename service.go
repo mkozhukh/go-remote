@@ -26,8 +26,9 @@ type service struct {
 func valueByType(atype reflect.Type, i int, thecall *callInfo) (reflect.Value, error) {
 	var argv reflect.Value
 
-	if i >= len(thecall.Args) {
-		return thecall.dependencies.Value(atype, thecall.ctx)
+	val, ok, err := thecall.dependencies.Value(atype, thecall.ctx)
+	if ok {
+		return val, err
 	}
 
 	// Decode the argument value

@@ -46,7 +46,7 @@ func (d *dependencyStore) AddProvider(provider interface{}) error {
 	return nil
 }
 
-func (d *dependencyStore) Value(rtype reflect.Type, ctx context.Context) (reflect.Value, error) {
+func (d *dependencyStore) Value(rtype reflect.Type, ctx context.Context) (reflect.Value, bool, error) {
 	keyType := rtype
 	if rtype.Kind() == reflect.Ptr {
 		keyType = rtype.Elem()
@@ -54,7 +54,7 @@ func (d *dependencyStore) Value(rtype reflect.Type, ctx context.Context) (reflec
 
 	test, ok := d.data[keyType]
 	if !ok {
-		return reflect.Value{}, errors.New("Missed parameter in method call")
+		return reflect.Value{}, false, nil
 	}
 
 	var args []reflect.Value
@@ -62,8 +62,12 @@ func (d *dependencyStore) Value(rtype reflect.Type, ctx context.Context) (reflec
 
 	out := test.Call(args)
 	if len(out) > 1 {
-		return out[0], out[1].Interface().(error)
+		err, _ := out[1].Interface().(error)
+		if err != nil {
+			log.Errorf("error during calculation %s\n%s", rtype.Name(), err.Error())
+		}
+		return out[0], true, err
 	}
 
-	return out[0], nil
+	return out[0], true, nil
 }

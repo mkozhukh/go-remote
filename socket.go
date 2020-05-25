@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/gorilla/websocket"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 type Client struct {
@@ -17,16 +18,15 @@ type Client struct {
 }
 
 type ResponseMessage struct {
-	Action string `json:"action"`
-	Body interface{} `json:"body,omitempty"`
+	Action string      `json:"action"`
+	Body   interface{} `json:"body,omitempty"`
 }
 
 type RequestMessage struct {
-	Action string `json:"action"`
-	Channel string `json:"channel"`
-	Body json.RawMessage `json:"body,omitempty"`
+	Action  string          `json:"action"`
+	Channel string          `json:"channel"`
+	Body    json.RawMessage `json:"body,omitempty"`
 }
-
 
 const pongWait = 60 * time.Second
 const pingPeriod = (pongWait * 9) / 10
@@ -38,16 +38,15 @@ var (
 	space   = []byte{' '}
 )
 
-
-func (c *Client) Start(){
+func (c *Client) Start() {
 	go c.readPump()
 	go c.writePump()
 
 	c.SendMessage("start", nil)
 }
 
-func (c *Client) SendMessage(name string, body interface{}){
-	m, _ := json.Marshal(&ResponseMessage{Action:name, Body: body})
+func (c *Client) SendMessage(name string, body interface{}) {
+	m, _ := json.Marshal(&ResponseMessage{Action: name, Body: body})
 	c.Send <- m
 }
 
@@ -98,13 +97,7 @@ func (c *Client) process(message []byte) {
 			return
 		}
 
-		resText, err := json.Marshal(&res)
-		if err != nil {
-			log.Errorf("can't parse result to JSON", err)
-			return
-		}
-
-		c.SendMessage("result", resText)
+		c.SendMessage("result", &res)
 	}
 }
 

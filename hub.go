@@ -5,8 +5,8 @@ import (
 )
 
 type message struct {
-	Channel string
-	Content interface{}
+	Channel string      `json:"name"`
+	Content interface{} `json:"value"`
 }
 
 type subscription struct {
@@ -56,7 +56,7 @@ func (h *Hub) UnSubscribe(channel string, c *Client) {
 }
 
 func (h *Hub) Publish(name string, data interface{}) {
-	h.publish <- message{Channel:name, Content: data}
+	h.publish <- message{Channel: name, Content: data}
 }
 
 func (h *Hub) onSubscribe(sub *subscription) {
@@ -84,7 +84,7 @@ func (h *Hub) onPublish(m *message) {
 	ch, ok := h.channels[m.Channel]
 	if ok {
 		for c := range ch.clients {
-			c.SendMessage("event", m.Content)
+			c.SendMessage("event", m)
 		}
 	}
 }

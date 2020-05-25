@@ -33,15 +33,21 @@ func (s *Server) GetAPI(ctx context.Context) API {
 		if value.isConstant {
 			out.Data[key] = value.value
 		} else {
-			raw, err := s.Dependencies.Value(value.rtype, ctx)
-			if err != nil {
-				log.Errorf("can't resolve api variable: %s\n%f", key, err)
-			} else {
-				if raw.Kind() == reflect.Ptr {
-					raw = raw.Elem()
-				}
-				out.Data[key] = raw.Interface()
+			raw, ok, err := s.Dependencies.Value(value.rtype, ctx)
+			if !ok {
+				log.Errorf("can't resolve api variable: %s", key)
+				continue
 			}
+
+			if err != nil {
+				log.Errorf("error during resolving api variable: %s\n%f", key, err)
+				continue
+			}
+
+			if raw.Kind() == reflect.Ptr {
+				raw = raw.Elem()
+			}
+			out.Data[key] = raw.Interface()
 		}
 	}
 
