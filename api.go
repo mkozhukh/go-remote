@@ -9,7 +9,6 @@ type ServiceAPI map[string]int
 type API struct {
 	Services  map[string]ServiceAPI  `json:"api"`
 	Data      map[string]interface{} `json:"data"`
-	Key       string                 `json:"key"`
 	WebSocket bool                   `json:"websocket,omitempty"`
 }
 
@@ -18,12 +17,6 @@ func (s *Server) GetAPI(ctx context.Context) API {
 	out := API{}
 	out.Services = make(map[string]ServiceAPI)
 	out.Data = make(map[string]interface{})
-
-	token := ctx.Value(TokenValue)
-	strKey, ok := token.(string)
-	if ok {
-		out.Key = strKey
-	}
 
 	for key, value := range s.services {
 		out.Services[key] = value.GetAPI()

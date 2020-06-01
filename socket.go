@@ -12,6 +12,7 @@ import (
 type Client struct {
 	Send   chan []byte
 	Server *Server
+	User   int
 
 	conn *websocket.Conn
 	ctx  context.Context
@@ -42,7 +43,12 @@ func (c *Client) Start() {
 	go c.readPump()
 	go c.writePump()
 
+	c.Server.Events.UserIn(c.User)
 	c.SendMessage("start", nil)
+}
+
+func (c *Client) Context() context.Context {
+	return c.ctx
 }
 
 func (c *Client) SendMessage(name string, body interface{}) {
@@ -52,6 +58,7 @@ func (c *Client) SendMessage(name string, body interface{}) {
 
 func (c *Client) readPump() {
 	defer func() {
+		c.Server.Events.UserOut(c.User)
 		c.Server.Events.UnSubscribe("", c)
 		c.conn.Close()
 	}()
@@ -124,7 +131,7 @@ func (c *Client) writePump() {
 			}
 			w.Write(message)
 
-			// Add queued chat messages to the current websocket message.
+			// Add queued messages to the current websocket message.
 			n := len(c.Send)
 			for i := 0; i < n; i++ {
 				w.Write(newline)

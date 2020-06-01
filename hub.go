@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-type message struct {
+type Message struct {
 	Channel string      `json:"name"`
 	Content interface{} `json:"value"`
 }
@@ -15,24 +15,41 @@ type subscription struct {
 	Mode    bool
 }
 
+type UserChange struct {
+	ID int `json:"id"`
+	Status bool `json:"status"`
+}
+
+type UserHandler func(u *UserChange)
+type ChannelGuard func(*Message,*Client) bool
+
 type channel struct {
 	clients map[*Client]bool
 }
 
 type Hub struct {
-	clients  map[*Client]bool
-	channels map[string]channel
+	UserHandler UserHandler
 
-	publish   chan message
+	users  map[int]int
+	channels map[string]channel
+	filters map[string]ChannelGuard
+
+	publish   chan Message
 	subscribe chan subscription
+	register chan UserChange
 }
 
 func newHub() *Hub {
 	return &Hub{
-		publish:   make(chan message),
+		UserHandler: func(u *UserChange){},
+
+		publish:   make(chan Message),
 		subscribe: make(chan subscription),
+		register:  make(chan UserChange),
+
+		filters: make(map[string]ChannelGuard),
 		channels:  make(map[string]channel),
-		clients:   make(map[*Client]bool),
+		users:   make(map[int]int),
 	}
 }
 
@@ -43,8 +60,14 @@ func (h *Hub) Run() {
 			h.onSubscribe(&sub)
 		case m := <-h.publish:
 			h.onPublish(&m)
+		case u := <-h.register:
+			h.onRegister(&u)
 		}
 	}
+}
+
+func (h *Hub) AddGuard(name string, filter func(*Message,*Client)bool){
+	h.filters[name] = filter
 }
 
 func (h *Hub) Subscribe(channel string, c *Client) {
@@ -56,7 +79,15 @@ func (h *Hub) UnSubscribe(channel string, c *Client) {
 }
 
 func (h *Hub) Publish(name string, data interface{}) {
-	h.publish <- message{Channel: name, Content: data}
+	h.publish <- Message{Channel: name, Content: data}
+}
+
+func (h *Hub) UserIn(id int) {
+	h.register <- UserChange{ID: id, Status: true}
+}
+
+func (h *Hub) UserOut(id int) {
+	h.register <- UserChange{ID: id, Status: false}
 }
 
 func (h *Hub) onSubscribe(sub *subscription) {
@@ -80,13 +111,38 @@ func (h *Hub) onSubscribe(sub *subscription) {
 	}
 }
 
-func (h *Hub) onPublish(m *message) {
+func (h *Hub) onPublish(m *Message) {
 	ch, ok := h.channels[m.Channel]
+	filter, hasFilter := h.filters[m.Channel]
+
 	if ok {
 		for c := range ch.clients {
-			c.SendMessage("event", m)
+			if !hasFilter || filter(m, c) {
+				c.SendMessage("event", m)
+			}
 		}
 	}
+}
+
+func (h *Hub) onRegister(u *UserChange){
+	c := h.users[u.ID]
+	if u.Status {
+		if c == 0 {
+			h.UserHandler(u)
+		}
+
+		c += 1
+	} else {
+		if c <= 1 {
+			h.UserHandler(u)
+			delete(h.users, u.ID)
+			return
+		} else {
+			c -= 1
+		}
+	}
+
+	h.users[u.ID] = c
 }
 
 func (h *Hub) LogState() string {

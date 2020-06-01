@@ -1,7 +1,6 @@
 package go_remote
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -12,7 +11,7 @@ import (
 
 type key int
 
-var TokenValue = key(1)
+var UserValue = key(1)
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -23,37 +22,20 @@ var upgrader = websocket.Upgrader{
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx := s.Context.FromRequest(r)
-	token := ctx.Value(TokenValue)
-	strToken, ok := token.(string)
+	ctx, err := s.Connect(r.Context())
+	if err != nil {
+		serveError(w, err)
+		return
+	}
 
 	isSocketStart := r.Method == "GET" && r.URL.Query().Get("ws") != ""
 	if r.Method == "GET" && !isSocketStart {
-		if strToken == "" && !s.config.WithoutKey {
-			strToken = randString(16)
-			ctx = context.WithValue(ctx, TokenValue, strToken)
-			s.Context.ToResponse(w, ctx, TokenValue)
-		}
 		serveJSON(w, s.GetAPI(ctx))
 		return
 	}
 
 	if !isSocketStart && r.Method != "POST" {
 		serveError(w, errors.New("only post and get request types are supported"))
-		return
-	}
-
-	var requestToken string
-	if isSocketStart {
-		requestToken = r.URL.Query().Get("key")
-	} else {
-		requestToken = r.Header.Get("Remote-Key")
-	}
-
-	// token is not defined or incorrect
-	if !s.config.WithoutKey && (requestToken == "" || !ok || strToken != requestToken) {
-		log.Debugf("invalid key %q %q", strToken, requestToken)
-		serveError(w, errors.New("invalid key"))
 		return
 	}
 
@@ -64,7 +46,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		client := Client{Server: s, conn: conn, Send: make(chan []byte, 256), ctx: ctx}
+		userID, _ := ctx.Value(UserValue).(int)
+		client := Client{Server: s, conn: conn, Send: make(chan []byte, 256), User: userID, ctx: ctx}
 		go client.Start()
 		return
 	}

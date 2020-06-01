@@ -10,15 +10,18 @@ import (
 // Guard is a guard function that allows or denies code execution based on the context
 type Guard = func(r context.Context) bool
 
+// Connect extends of blocks request based on context value
+type Connect = func(r context.Context) (context.Context,error)
+
 // Server structure stores all methods, events and data of API
 type Server struct {
 	services map[string]*service
 	data     map[string]dataRecord
 	config   *ServerConfig
 
+	Connect 	 Connect
 	Events       *Hub
 	Dependencies *dependencyStore
-	Context      *contextStore
 }
 
 type ServerConfig struct {
@@ -51,7 +54,7 @@ func NewServer(config *ServerConfig) *Server {
 	}
 
 	s.Dependencies = newDependencyStore()
-	s.Context = newContextStore()
+	s.Connect = func(ctx context.Context) (context.Context,error) { return ctx, nil }
 	return &s
 }
 
