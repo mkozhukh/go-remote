@@ -24,9 +24,9 @@ type ResponseMessage struct {
 }
 
 type RequestMessage struct {
-	Action  string          `json:"action"`
-	Channel string          `json:"channel"`
-	Body    json.RawMessage `json:"body,omitempty"`
+	Action string          `json:"action"`
+	Name   string          `json:"name"`
+	Body   json.RawMessage `json:"body,omitempty"`
 }
 
 const pongWait = 60 * time.Second
@@ -90,14 +90,14 @@ func (c *Client) process(message []byte) {
 	}
 
 	if m.Action == "subscribe" {
-		c.Server.Events.Subscribe(m.Channel, c)
+		c.Server.Events.Subscribe(m.Name, c)
 	}
 
 	if m.Action == "unsubscribe" {
-		c.Server.Events.UnSubscribe(m.Channel, c)
+		c.Server.Events.UnSubscribe(m.Name, c)
 	}
 
-	if m.Action == "remote" {
+	if m.Action == "call" {
 		res := c.Server.Process(m.Body, c.ctx)
 		if len(res) < 1 {
 			log.Errorf("somehow process doesn't return results")
