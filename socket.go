@@ -31,7 +31,7 @@ type RequestMessage struct {
 
 const pongWait = 60 * time.Second
 const pingPeriod = (pongWait * 9) / 10
-const maxMessageSize = 4000
+var MaxSocketMessageSize = 4000
 const writeWait = 10 * time.Second
 
 var (
@@ -62,7 +62,7 @@ func (c *Client) readPump() {
 		c.Server.Events.UnSubscribe("", c)
 		c.conn.Close()
 	}()
-	c.conn.SetReadLimit(maxMessageSize)
+	c.conn.SetReadLimit(int64(MaxSocketMessageSize))
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 
@@ -130,12 +130,17 @@ func (c *Client) writePump() {
 				return
 			}
 			w.Write(message)
+			w.Close()
 
 			// Add queued messages to the current websocket message.
 			n := len(c.Send)
 			for i := 0; i < n; i++ {
-				w.Write(newline)
+				w, err := c.conn.NextWriter(websocket.TextMessage)
+				if err != nil {
+					return
+				}
 				w.Write(<-c.Send)
+				w.Close()
 			}
 
 			if err := w.Close(); err != nil {
