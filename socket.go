@@ -31,7 +31,9 @@ type RequestMessage struct {
 
 const pongWait = 60 * time.Second
 const pingPeriod = (pongWait * 9) / 10
+
 var MaxSocketMessageSize = 4000
+
 const writeWait = 10 * time.Second
 
 var (

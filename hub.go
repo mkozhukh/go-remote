@@ -16,12 +16,12 @@ type subscription struct {
 }
 
 type UserChange struct {
-	ID int `json:"id"`
+	ID     int  `json:"id"`
 	Status bool `json:"status"`
 }
 
 type UserHandler func(u *UserChange)
-type ChannelGuard func(*Message,*Client) bool
+type ChannelGuard func(*Message, *Client) bool
 
 type channel struct {
 	clients map[*Client]bool
@@ -30,26 +30,26 @@ type channel struct {
 type Hub struct {
 	UserHandler UserHandler
 
-	users  map[int]int
+	users    map[int]int
 	channels map[string]channel
-	filters map[string]ChannelGuard
+	filters  map[string]ChannelGuard
 
 	publish   chan Message
 	subscribe chan subscription
-	register chan UserChange
+	register  chan UserChange
 }
 
 func newHub() *Hub {
 	return &Hub{
-		UserHandler: func(u *UserChange){},
+		UserHandler: func(u *UserChange) {},
 
 		publish:   make(chan Message),
 		subscribe: make(chan subscription),
 		register:  make(chan UserChange),
 
-		filters: make(map[string]ChannelGuard),
-		channels:  make(map[string]channel),
-		users:   make(map[int]int),
+		filters:  make(map[string]ChannelGuard),
+		channels: make(map[string]channel),
+		users:    make(map[int]int),
 	}
 }
 
@@ -66,7 +66,7 @@ func (h *Hub) Run() {
 	}
 }
 
-func (h *Hub) AddGuard(name string, filter func(*Message,*Client)bool){
+func (h *Hub) AddGuard(name string, filter func(*Message, *Client) bool) {
 	h.filters[name] = filter
 }
 
@@ -124,7 +124,7 @@ func (h *Hub) onPublish(m *Message) {
 	}
 }
 
-func (h *Hub) onRegister(u *UserChange){
+func (h *Hub) onRegister(u *UserChange) {
 	c := h.users[u.ID]
 	if u.Status {
 		if c == 0 {
