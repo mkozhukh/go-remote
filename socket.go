@@ -66,7 +66,10 @@ func (c *Client) readPump() {
 	}()
 	c.conn.SetReadLimit(int64(MaxSocketMessageSize))
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
 
 	for {
 		_, message, err := c.conn.ReadMessage()
@@ -131,8 +134,14 @@ func (c *Client) writePump() {
 			if err != nil {
 				return
 			}
-			w.Write(message)
-			w.Close()
+			_, err = w.Write(message)
+			if err != nil {
+				return
+			}
+			err = w.Close()
+			if err != nil {
+				return
+			}
 
 			// Add queued messages to the current websocket message.
 			n := len(c.Send)
@@ -141,13 +150,16 @@ func (c *Client) writePump() {
 				if err != nil {
 					return
 				}
-				w.Write(<-c.Send)
-				w.Close()
+				_, err = w.Write(<-c.Send)
+				if err != nil {
+					return
+				}
+				err = w.Close()
+				if err != nil {
+					return
+				}
 			}
 
-			if err := w.Close(); err != nil {
-				return
-			}
 		case <-ticker.C:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {

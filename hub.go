@@ -20,6 +20,15 @@ type UserChange struct {
 	Status bool `json:"status"`
 }
 
+type HubStatus struct {
+	Users    map[int]int
+	Channels map[string]ChannelStatus
+}
+
+type ChannelStatus struct {
+	Subscribed []int
+}
+
 type UserHandler func(u *UserChange)
 type ChannelGuard func(*Message, *Client) bool
 
@@ -50,6 +59,22 @@ func newHub() *Hub {
 		filters:  make(map[string]ChannelGuard),
 		channels: make(map[string]channel),
 		users:    make(map[int]int),
+	}
+}
+
+func (h *Hub) Status() *HubStatus {
+	info := make(map[string]ChannelStatus)
+
+	for name, ch := range h.channels {
+		subs := make([]int, 0, len(ch.clients))
+		for cl := range ch.clients {
+			subs = append(subs, cl.User)
+		}
+		info[name] = ChannelStatus{Subscribed: subs}
+	}
+	return &HubStatus{
+		Users:    h.users,
+		Channels: info,
 	}
 }
 
@@ -91,23 +116,37 @@ func (h *Hub) UserOut(id int) {
 }
 
 func (h *Hub) onSubscribe(sub *subscription) {
+	if !sub.Mode {
+		if sub.Channel == "" {
+			//unsubscribe from all
+			for name := range h.channels {
+				h.onUnSubscribe(name, sub.Client)
+			}
+		} else {
+			h.onUnSubscribe(sub.Channel, sub.Client)
+		}
+
+		return
+	}
+
 	ch, ok := h.channels[sub.Channel]
 	if !ok {
-		if !sub.Mode {
-			// unsubscribe from non-existing channel
-			return
-		}
 		ch = channel{clients: make(map[*Client]bool)}
 		h.channels[sub.Channel] = ch
 	}
 
-	if sub.Mode {
-		ch.clients[sub.Client] = true
-	} else {
-		delete(ch.clients, sub.Client)
-		if len(ch.clients) == 0 {
-			delete(h.channels, sub.Channel)
-		}
+	ch.clients[sub.Client] = true
+}
+
+func (h *Hub) onUnSubscribe(channel string, client *Client) {
+	ch, ok := h.channels[channel]
+	if !ok {
+		return
+	}
+
+	delete(ch.clients, client)
+	if len(ch.clients) == 0 {
+		delete(h.channels, channel)
 	}
 }
 

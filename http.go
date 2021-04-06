@@ -21,6 +21,10 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+type StatusInfo struct {
+	Hub HubStatus
+}
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, err := s.Connect(r.Context())
 	if err != nil {
@@ -59,6 +63,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	res := s.Process(body, ctx)
 	serveJSON(w, res)
+}
+
+func (s *Server) ServeStatus(w http.ResponseWriter, _ *http.Request) {
+	serveJSON(w, StatusInfo{Hub: *s.Events.Status()})
 }
 
 func serveError(w http.ResponseWriter, err error) {

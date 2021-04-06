@@ -12,7 +12,7 @@ func SetLogger(logger Logger) {
 	log = logger
 }
 
-// Logger interface, used for errror and debug logging
+// Logger interface, used for error and debug logging
 type Logger interface {
 	Errorf(string, ...interface{})
 	Debugf(string, ...interface{})
