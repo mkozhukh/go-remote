@@ -7,6 +7,7 @@ import (
 type Message struct {
 	Channel string      `json:"name"`
 	Content interface{} `json:"value"`
+	Clients []ConnectionID
 }
 
 type subscription struct {
@@ -103,8 +104,8 @@ func (h *Hub) UnSubscribe(channel string, c *Client) {
 	h.subscribe <- subscription{c, channel, false}
 }
 
-func (h *Hub) Publish(name string, data interface{}) {
-	h.publish <- Message{Channel: name, Content: data}
+func (h *Hub) Publish(name string, data interface{}, clients... ConnectionID) {
+	h.publish <- Message{Channel: name, Content: data, Clients: clients }
 }
 
 func (h *Hub) UserIn(id int) {
@@ -157,7 +158,15 @@ func (h *Hub) onPublish(m *Message) {
 	if ok {
 		for c := range ch.clients {
 			if !hasFilter || filter(m, c) {
-				c.SendMessage("event", m)
+				if len(m.Clients) != 0 {
+					for _, x := range m.Clients {
+						if x == c.ConnID {
+							c.SendMessage("event", m)
+						}
+					}
+				} else {
+					c.SendMessage("event", m)
+				}
 			}
 		}
 	}
