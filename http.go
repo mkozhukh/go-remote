@@ -1,6 +1,7 @@
 package go_remote
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -12,6 +13,7 @@ import (
 type key int
 
 var UserValue = key(1)
+var ConnectionValue = key(2)
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -47,7 +49,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		userID, _ := ctx.Value(UserValue).(int)
-		client := Client{Server: s, conn: conn, Send: make(chan []byte, 256), User: userID, ctx: ctx}
+		id := nextId()
+		client := Client{Server: s, conn: conn, Send: make(chan []byte, 256), User: userID, ConnID:id }
+		client.ctx = context.WithValue(ctx, ConnectionValue, id)
 		go client.Start()
 		return
 	}
@@ -71,4 +75,10 @@ func serveJSON(w http.ResponseWriter, res interface{}) {
 	w.Header().Set("Content-type", "text/json")
 	out, _ := json.Marshal(res)
 	w.Write(out)
+}
+
+var idCounter int64
+func nextId() int64 {
+	idCounter += 1
+	return idCounter
 }
