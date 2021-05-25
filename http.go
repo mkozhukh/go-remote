@@ -28,7 +28,7 @@ type StatusInfo struct {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx, err := s.Connect(r.Context())
+	ctx, err := s.Connect(r)
 	if err != nil {
 		serveError(w, err)
 		return

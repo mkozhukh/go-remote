@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"reflect"
 )
 
@@ -11,7 +12,7 @@ import (
 type Guard = func(r context.Context) bool
 
 // Connect extends of blocks request based on context value
-type Connect = func(r context.Context) (context.Context, error)
+type Connect = func(r *http.Request) (context.Context, error)
 
 // Server structure stores all methods, events and data of API
 type Server struct {
@@ -54,7 +55,7 @@ func NewServer(config *ServerConfig) *Server {
 	}
 
 	s.Dependencies = newDependencyStore()
-	s.Connect = func(ctx context.Context) (context.Context, error) { return ctx, nil }
+	s.Connect = func(r *http.Request) (context.Context, error) { return r.Context(), nil }
 	return &s
 }
 
