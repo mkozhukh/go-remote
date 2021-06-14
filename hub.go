@@ -17,8 +17,9 @@ type subscription struct {
 }
 
 type UserChange struct {
-	ID     int  `json:"id"`
-	Status bool `json:"status"`
+	ID         int  `json:"id"`
+	Connection int  `json:"-"`
+	Status     bool `json:"status"`
 }
 
 type HubStatus struct {
@@ -39,6 +40,7 @@ type channel struct {
 
 type Hub struct {
 	UserHandler UserHandler
+	ConnHandler UserHandler
 
 	users    map[int]int
 	channels map[string]channel
@@ -52,6 +54,7 @@ type Hub struct {
 func newHub() *Hub {
 	return &Hub{
 		UserHandler: func(u *UserChange) {},
+		ConnHandler: func(u *UserChange) {},
 
 		publish:   make(chan Message),
 		subscribe: make(chan subscription),
@@ -104,16 +107,16 @@ func (h *Hub) UnSubscribe(channel string, c *Client) {
 	h.subscribe <- subscription{c, channel, false}
 }
 
-func (h *Hub) Publish(name string, data interface{}, clients... ConnectionID) {
-	h.publish <- Message{Channel: name, Content: data, Clients: clients }
+func (h *Hub) Publish(name string, data interface{}, clients ...ConnectionID) {
+	h.publish <- Message{Channel: name, Content: data, Clients: clients}
 }
 
-func (h *Hub) UserIn(id int) {
-	h.register <- UserChange{ID: id, Status: true}
+func (h *Hub) UserIn(id, device int) {
+	h.register <- UserChange{ID: id, Connection: device, Status: true}
 }
 
-func (h *Hub) UserOut(id int) {
-	h.register <- UserChange{ID: id, Status: false}
+func (h *Hub) UserOut(id, conn int) {
+	h.register <- UserChange{ID: id, Connection: conn, Status: false}
 }
 
 func (h *Hub) onSubscribe(sub *subscription) {
@@ -160,7 +163,7 @@ func (h *Hub) onPublish(m *Message) {
 			if !hasFilter || filter(m, c) {
 				if len(m.Clients) != 0 {
 					for _, x := range m.Clients {
-						if x == c.ConnID {
+						if x == ConnectionID(c.ConnID) {
 							c.SendMessage("event", m)
 						}
 					}
@@ -191,6 +194,7 @@ func (h *Hub) onRegister(u *UserChange) {
 	}
 
 	h.users[u.ID] = c
+	h.ConnHandler(u)
 }
 
 func (h *Hub) LogState() string {

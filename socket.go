@@ -15,7 +15,7 @@ type Client struct {
 	Send   chan []byte
 	Server *Server
 	User   int
-	ConnID ConnectionID
+	ConnID int
 
 	conn *websocket.Conn
 	ctx  context.Context
@@ -48,8 +48,8 @@ func (c *Client) Start() {
 	go c.readPump()
 	go c.writePump()
 
-	c.Server.Events.UserIn(c.User)
-	c.SendMessage("start",  c.ConnID)
+	c.Server.Events.UserIn(c.User, c.ConnID)
+	c.SendMessage("start", c.ConnID)
 }
 
 func (c *Client) Context() context.Context {
@@ -63,7 +63,7 @@ func (c *Client) SendMessage(name string, body interface{}) {
 
 func (c *Client) readPump() {
 	defer func() {
-		c.Server.Events.UserOut(c.User)
+		c.Server.Events.UserOut(c.User, c.ConnID)
 		c.Server.Events.UnSubscribe("", c)
 		c.conn.Close()
 	}()

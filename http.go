@@ -53,9 +53,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		userID, _ := ctx.Value(UserValue).(int)
-		id := nextId()
-		client := Client{Server: s, conn: conn, Send: make(chan []byte, 256), User: userID, ConnID:id }
-		client.ctx = context.WithValue(ctx, ConnectionValue, id)
+		cid, cidExists := ctx.Value(ConnectionValue).(int)
+		if !cidExists {
+			cid := nextId()
+			ctx = context.WithValue(ctx, ConnectionValue, cid)
+		}
+
+		client := Client{Server: s, conn: conn, Send: make(chan []byte, 256), User: userID, ConnID: cid }
+		client.ctx = ctx
+
 		go client.Start()
 		return
 	}
@@ -86,6 +92,7 @@ func serveJSON(w http.ResponseWriter, res interface{}) {
 }
 
 var idCounter ConnectionID
+
 func nextId() ConnectionID {
 	idCounter += 1
 	return idCounter
