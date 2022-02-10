@@ -11,7 +11,7 @@ import (
 
 type ConnectionID int64
 
-type Client struct {
+type Socket struct {
 	Send   chan []byte
 	Server *Server
 	User   int
@@ -44,7 +44,7 @@ var (
 	space   = []byte{' '}
 )
 
-func (c *Client) Start() {
+func (c *Socket) Start() {
 	go c.readPump()
 	go c.writePump()
 
@@ -52,16 +52,16 @@ func (c *Client) Start() {
 	c.SendMessage("start", c.ConnID)
 }
 
-func (c *Client) Context() context.Context {
+func (c *Socket) Context() context.Context {
 	return c.ctx
 }
 
-func (c *Client) SendMessage(name string, body interface{}) {
+func (c *Socket) SendMessage(name string, body interface{}) {
 	m, _ := json.Marshal(&ResponseMessage{Action: name, Body: body})
 	c.Send <- m
 }
 
-func (c *Client) readPump() {
+func (c *Socket) readPump() {
 	defer func() {
 		c.Server.Events.UserOut(c.User, c.ConnID)
 		c.Server.Events.UnSubscribe("", c)
@@ -88,7 +88,7 @@ func (c *Client) readPump() {
 	}
 }
 
-func (c *Client) process(message []byte) {
+func (c *Socket) process(message []byte) {
 	m := RequestMessage{}
 	err := json.Unmarshal(message, &m)
 	if err != nil {
@@ -116,7 +116,7 @@ func (c *Client) process(message []byte) {
 	}
 }
 
-func (c *Client) writePump() {
+func (c *Socket) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()

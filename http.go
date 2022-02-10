@@ -59,7 +59,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			ctx = context.WithValue(ctx, ConnectionValue, cid)
 		}
 
-		client := Client{Server: s, conn: conn, Send: make(chan []byte, 256), User: userID, ConnID: cid }
+		client := Socket{Server: s, conn: conn, Send: make(chan []byte, 256), User: userID, ConnID: cid}
 		client.ctx = ctx
 
 		go client.Start()

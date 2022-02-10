@@ -11,7 +11,7 @@ type Message struct {
 }
 
 type subscription struct {
-	Client  *Client
+	Client  *Socket
 	Channel string
 	Mode    bool
 }
@@ -32,10 +32,10 @@ type ChannelStatus struct {
 }
 
 type UserHandler func(u *UserChange)
-type ChannelGuard func(*Message, *Client) bool
+type ChannelGuard func(*Message, *Socket) bool
 
 type channel struct {
-	clients map[*Client]bool
+	clients map[*Socket]bool
 }
 
 type Hub struct {
@@ -95,15 +95,15 @@ func (h *Hub) Run() {
 	}
 }
 
-func (h *Hub) AddGuard(name string, filter func(*Message, *Client) bool) {
+func (h *Hub) AddGuard(name string, filter func(*Message, *Socket) bool) {
 	h.filters[name] = filter
 }
 
-func (h *Hub) Subscribe(channel string, c *Client) {
+func (h *Hub) Subscribe(channel string, c *Socket) {
 	h.subscribe <- subscription{c, channel, true}
 }
 
-func (h *Hub) UnSubscribe(channel string, c *Client) {
+func (h *Hub) UnSubscribe(channel string, c *Socket) {
 	h.subscribe <- subscription{c, channel, false}
 }
 
@@ -135,14 +135,14 @@ func (h *Hub) onSubscribe(sub *subscription) {
 
 	ch, ok := h.channels[sub.Channel]
 	if !ok {
-		ch = channel{clients: make(map[*Client]bool)}
+		ch = channel{clients: make(map[*Socket]bool)}
 		h.channels[sub.Channel] = ch
 	}
 
 	ch.clients[sub.Client] = true
 }
 
-func (h *Hub) onUnSubscribe(channel string, client *Client) {
+func (h *Hub) onUnSubscribe(channel string, client *Socket) {
 	ch, ok := h.channels[channel]
 	if !ok {
 		return
