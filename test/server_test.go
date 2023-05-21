@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/mkozhukh/go-remote.git"
 	"net/http"
 	"reflect"
 	"testing"
+
+	go_remote "github.com/mkozhukh/go-remote"
 )
 
 type StubCalck struct {

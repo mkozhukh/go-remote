@@ -23,7 +23,7 @@ type service struct {
 	method map[string]*methodType // registered methods
 }
 
-func valueByType(atype reflect.Type, i int, thecall *callInfo) (reflect.Value, error) {
+func valueByType(atype reflect.Type, i int, thecall *callInfo, args callArgs) (reflect.Value, error) {
 	var argv reflect.Value
 
 	val, ok, err := thecall.dependencies.Value(atype, thecall.ctx)
@@ -41,7 +41,7 @@ func valueByType(atype reflect.Type, i int, thecall *callInfo) (reflect.Value, e
 	}
 
 	// argv guaranteed to be a pointer now.
-	if err := thecall.readArgument(i, argv.Interface()); err != nil {
+	if err := args.ReadArgument(i, argv.Interface()); err != nil {
 		return argv, err
 	}
 	if argIsValue {
@@ -51,7 +51,7 @@ func valueByType(atype reflect.Type, i int, thecall *callInfo) (reflect.Value, e
 	return argv, nil
 }
 
-func (s *service) Call(thecall *callInfo, res *Response) {
+func (s *service) Call(thecall *callInfo, args callArgs, res *Response) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Errorf(string(debug.Stack()))
@@ -77,7 +77,7 @@ func (s *service) Call(thecall *callInfo, res *Response) {
 	//replyv := make([]reflect.Value, len(mtype.outTypes))
 	argv[0] = s.rcvr
 	for i := 1; i < len(mtype.inTypes); i++ {
-		argv[i], err = valueByType(mtype.inTypes[i], i-1, thecall)
+		argv[i], err = valueByType(mtype.inTypes[i], i-1, thecall, args)
 		if err != nil {
 			res.Error = err.Error()
 			log.Debugf("Invalid arguments, %s", err.Error())

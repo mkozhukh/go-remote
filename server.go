@@ -2,7 +2,6 @@ package go_remote
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"reflect"
@@ -26,8 +25,9 @@ type Server struct {
 }
 
 type ServerConfig struct {
-	WebSocket  bool
-	WithoutKey bool
+	WebSocket   bool
+	MessagePack bool
+	WithoutKey  bool
 }
 
 // Response handles results of remote calls
@@ -108,10 +108,16 @@ func (s *Server) register(name string, rcvr interface{}, guard Guard) error {
 
 // Process starts the package processing, executing all requested methods
 func (s *Server) Process(input []byte, c context.Context) []Response {
-	data := callData{}
-	err := json.Unmarshal(input, &data)
-	response := make([]Response, len(data))
+	var data callData
+	if s.config.MessagePack {
+		data = callDataMessagePack{}
 
+	} else {
+		data = callDataJSON{}
+	}
+
+	err := data.Unmarshal(input)
+	response := make([]Response, data.Size())
 	if err != nil {
 		log.Errorf(err.Error())
 		return response
@@ -119,15 +125,15 @@ func (s *Server) Process(input []byte, c context.Context) []Response {
 
 	res := make(chan *Response)
 
-	for i := range data {
-		data[i].parse()
-		data[i].dependencies = s.Dependencies
-		data[i].ctx = c
+	for i := 0; i < data.Size(); i++ {
+		m := data.At(i)
+		i := m.Info()
+		i.Init(c, s.Dependencies)
 
-		go s.Call(data[i], res)
+		go s.Call(i, m, res)
 	}
 
-	for i := range data {
+	for i := 0; i < data.Size(); i++ {
 		response[i] = *(<-res)
 	}
 
@@ -135,7 +141,7 @@ func (s *Server) Process(input []byte, c context.Context) []Response {
 }
 
 // Call allows to execute some Servers's method
-func (s *Server) Call(call *callInfo, res chan *Response) {
+func (s *Server) Call(call *callInfo, args callArgs, res chan *Response) {
 	response := Response{ID: call.ID}
 
 	log.Debugf("Call %s.%s", call.service, call.method)
@@ -143,7 +149,7 @@ func (s *Server) Call(call *callInfo, res chan *Response) {
 	if !ok {
 		response.Error = "Unknown service"
 	} else {
-		service.Call(call, &response)
+		service.Call(call, args, &response)
 	}
 
 	res <- &response

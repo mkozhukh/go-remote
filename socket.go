@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/mkozhukh/msgpack/v5"
 )
 
 type ConnectionID int64
@@ -30,6 +31,37 @@ type RequestMessage struct {
 	Action string          `json:"action"`
 	Name   string          `json:"name"`
 	Body   json.RawMessage `json:"body,omitempty"`
+}
+
+type RequestMessageJSON struct {
+	RequestMessage
+	Body json.RawMessage `json:"body,omitempty"`
+}
+
+type RequestMessageMessagePack struct {
+	RequestMessage
+	Body json.RawMessage `json:"body,omitempty"`
+}
+
+type RequestMessageCommon interface {
+	Info() *RequestMessage
+	Unmarshal([]byte) error
+}
+
+func (r RequestMessageJSON) Info() *RequestMessage {
+	return &r.RequestMessage
+}
+
+func (r RequestMessageMessagePack) Info() *RequestMessage {
+	return &r.RequestMessage
+}
+
+func (r RequestMessageJSON) Unmarshal(v []byte) error {
+	return json.Unmarshal(v, &r)
+}
+
+func (r RequestMessageMessagePack) Unmarshal(v []byte) error {
+	return msgpack.Unmarshal(v, &r)
 }
 
 const pongWait = 60 * time.Second
@@ -57,7 +89,20 @@ func (c *Client) Context() context.Context {
 }
 
 func (c *Client) SendMessage(name string, body interface{}) {
-	m, _ := json.Marshal(&ResponseMessage{Action: name, Body: body})
+	msg := &ResponseMessage{Action: name, Body: body}
+
+	var err error
+	var m []byte
+	if c.Server.config.MessagePack {
+		m, err = msgpack.Marshal(msg)
+	} else {
+		m, err = json.Marshal(msg)
+	}
+
+	if err != nil {
+		log.Errorf("error while marshalling message: %s", err.Error())
+		return
+	}
 	c.Send <- m
 }
 
@@ -89,24 +134,31 @@ func (c *Client) readPump() {
 }
 
 func (c *Client) process(message []byte) {
-	m := RequestMessage{}
-	err := json.Unmarshal(message, &m)
+	var m RequestMessageCommon
+	if c.Server.config.MessagePack {
+		m = RequestMessageMessagePack{}
+	} else {
+		m = RequestMessageJSON{}
+	}
+
+	err := m.Unmarshal(message)
 	if err != nil {
 		log.Errorf("invalid message: %s", message)
 		log.Errorf(err.Error())
 		return
 	}
 
-	if m.Action == "subscribe" {
-		c.Server.Events.Subscribe(m.Name, c)
+	info := m.Info()
+	if info.Action == "subscribe" {
+		c.Server.Events.Subscribe(info.Name, c)
 	}
 
-	if m.Action == "unsubscribe" {
-		c.Server.Events.UnSubscribe(m.Name, c)
+	if info.Action == "unsubscribe" {
+		c.Server.Events.UnSubscribe(info.Name, c)
 	}
 
-	if m.Action == "call" {
-		res := c.Server.Process(m.Body, c.ctx)
+	if info.Action == "call" {
+		res := c.Server.Process(info.Body, c.ctx)
 		if len(res) < 1 {
 			log.Errorf("somehow process doesn't return results")
 			return

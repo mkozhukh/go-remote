@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
+	"github.com/mkozhukh/msgpack/v5"
 )
 
 type key int
@@ -36,7 +37,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	isSocketStart := r.Method == "GET" && r.URL.Query().Get("ws") != ""
 	if r.Method == "GET" && !isSocketStart {
-		serveJSON(w, s.GetAPI(ctx))
+		if s.config.MessagePack {
+			serveMessagePack(w, s.GetAPI(ctx))
+		} else {
+			serveJSON(w, s.GetAPI(ctx))
+		}
 		return
 	}
 
@@ -59,7 +64,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			ctx = context.WithValue(ctx, ConnectionValue, cid)
 		}
 
-		client := Client{Server: s, conn: conn, Send: make(chan []byte, 256), User: userID, ConnID: cid }
+		client := Client{Server: s, conn: conn, Send: make(chan []byte, 256), User: userID, ConnID: cid}
 		client.ctx = ctx
 
 		go client.Start()
@@ -72,12 +77,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res := s.Process(body, ctx)
-	serveJSON(w, res)
+
+	if s.config.MessagePack {
+		serveMessagePack(w, res)
+	} else {
+		serveJSON(w, res)
+	}
 }
 
-func (s *Server) ServeStatus(w http.ResponseWriter, _ *http.Request) {
-	serveJSON(w, StatusInfo{Hub: *s.Events.Status()})
-}
+// func (s *Server) ServeStatus(w http.ResponseWriter, _ *http.Request) {
+// 	serveJSON(w, StatusInfo{Hub: *s.Events.Status()})
+// }
 
 func serveError(w http.ResponseWriter, err error) {
 	text := err.Error()
@@ -88,6 +98,12 @@ func serveError(w http.ResponseWriter, err error) {
 func serveJSON(w http.ResponseWriter, res interface{}) {
 	w.Header().Set("Content-type", "text/json")
 	out, _ := json.Marshal(res)
+	w.Write(out)
+}
+
+func serveMessagePack(w http.ResponseWriter, res interface{}) {
+	w.Header().Set("Content-type", "application/x-msgpack")
+	out, _ := msgpack.Marshal(res)
 	w.Write(out)
 }
 
