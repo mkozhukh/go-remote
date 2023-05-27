@@ -91,7 +91,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func serveError(w http.ResponseWriter, err error) {
 	text := err.Error()
-	log.Errorf(text)
+	log.Error(text)
 	http.Error(w, text, 500)
 }
 

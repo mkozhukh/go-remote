@@ -1,29 +1,29 @@
 package go_remote
 
 import (
-	"fmt"
-	stdlog "log"
+	"os"
+
+	deflog "github.com/charmbracelet/log"
 )
-
-var log Logger = defaultLogger{}
-
-// SetLogger allows to set default package logger
-func SetLogger(logger Logger) {
-	log = logger
-}
 
 // Logger interface, used for error and debug logging
 type Logger interface {
-	Errorf(string, ...interface{})
-	Debugf(string, ...interface{})
+	Info(interface{}, ...interface{})
+	Warn(interface{}, ...interface{})
+	Fatal(interface{}, ...interface{})
+	Error(interface{}, ...interface{})
+	Debug(interface{}, ...interface{})
 }
 
-type defaultLogger struct{}
+var log Logger
 
-func (l defaultLogger) Errorf(format string, args ...interface{}) {
-	stdlog.Printf("ERROR: "+format+"\n", args...)
+func init() {
+	t := deflog.New(os.Stdout)
+	t.SetLevel(deflog.DebugLevel)
+	log = t
 }
 
-func (l defaultLogger) Debugf(format string, args ...interface{}) {
-	fmt.Printf("DEBUG: "+format+"\n", args...)
+// SetLogger allows to set default package logger
+func SetLogger(l Logger) {
+	log = l
 }

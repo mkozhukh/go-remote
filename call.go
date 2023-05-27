@@ -35,7 +35,7 @@ func (c callDataJSON) At(index int) callInfoCommon {
 	return c[index]
 }
 
-func (c callDataJSON) Unmarshal(v []byte) error {
+func (c *callDataJSON) Unmarshal(v []byte) error {
 	return json.Unmarshal(v, &c)
 }
 
@@ -49,7 +49,7 @@ func (c callDataMessagePack) At(index int) callInfoCommon {
 	return c[index]
 }
 
-func (c callDataMessagePack) Unmarshal(v []byte) error {
+func (c *callDataMessagePack) Unmarshal(v []byte) error {
 	return msgpack.Unmarshal(v, &c)
 }
 

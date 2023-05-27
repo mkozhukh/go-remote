@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net/http"
 	"reflect"
 	"testing"
 
@@ -53,39 +52,20 @@ func compareJSON(actualString string, expectedString string) bool {
 }
 
 func TestEmptyAPI(t *testing.T) {
-	c := go_remote.NewServer()
+	c := go_remote.NewServer(&go_remote.ServerConfig{})
 
-	ctx := c.Context.FromRequest(&http.Request{})
+	ctx := context.Background()
 	api := c.GetAPI(ctx)
 	if !reflect.DeepEqual(api, go_remote.API{
 		Services: map[string]go_remote.ServiceAPI{},
 		Data:     map[string]interface{}{},
-		Key:      "",
-	}) {
-		t.Errorf("Incorrect empty api serialization, %+v", api)
-	}
-}
-
-func TestEmptyAPIWithToken(t *testing.T) {
-	c := go_remote.NewServer()
-	c.Context.AddProvider(func(ctx context.Context, r *http.Request) context.Context {
-		return context.WithValue(ctx, go_remote.TokenValue, "123")
-	})
-
-	ctx := c.Context.FromRequest(&http.Request{})
-	api := c.GetAPI(ctx)
-
-	if !reflect.DeepEqual(api, go_remote.API{
-		Services: map[string]go_remote.ServiceAPI{},
-		Data:     map[string]interface{}{},
-		Key:      "123",
 	}) {
 		t.Errorf("Incorrect empty api serialization, %+v", api)
 	}
 }
 
 func TestRegisterConstant(t *testing.T) {
-	c := go_remote.NewServer()
+	c := go_remote.NewServer(&go_remote.ServerConfig{})
 
 	someData := struct {
 		Name   string
@@ -105,7 +85,7 @@ func TestRegisterConstant(t *testing.T) {
 		t.Error("AddConstant error " + err.Error())
 	}
 
-	ctx := c.Context.FromRequest(&http.Request{})
+	ctx := context.Background()
 	api := c.GetAPI(ctx)
 
 	if !reflect.DeepEqual(api, go_remote.API{
@@ -115,14 +95,13 @@ func TestRegisterConstant(t *testing.T) {
 			"test2": someData,
 			"test3": someData,
 		},
-		Key: "",
 	}) {
 		t.Errorf("Incorrect api serialization, %+v", api)
 	}
 }
 
 func TestRegisterVariable(t *testing.T) {
-	c := go_remote.NewServer()
+	c := go_remote.NewServer(&go_remote.ServerConfig{})
 
 	type UserInfo1 struct {
 		Name   string
@@ -156,11 +135,18 @@ func TestRegisterVariable(t *testing.T) {
 	err = c.Dependencies.AddProvider(func(ctx context.Context) UserInfo1 {
 		return someData
 	})
+	if err != nil {
+		t.Error("AddProvider error " + err.Error())
+	}
+
 	err = c.Dependencies.AddProvider(func(ctx context.Context) *UserInfo2 {
 		return &otherData
 	})
+	if err != nil {
+		t.Error("AddProvider error " + err.Error())
+	}
 
-	ctx := c.Context.FromRequest(&http.Request{})
+	ctx := context.Background()
 	api := c.GetAPI(ctx)
 
 	if !reflect.DeepEqual(api, go_remote.API{
@@ -171,14 +157,13 @@ func TestRegisterVariable(t *testing.T) {
 			"user3": otherData,
 			"user4": otherData,
 		},
-		Key: "",
 	}) {
 		t.Errorf("Incorrect api serialization, %+v", api)
 	}
 }
 
 func TestRegisterService(t *testing.T) {
-	c := go_remote.NewServer()
+	c := go_remote.NewServer(&go_remote.ServerConfig{})
 
 	err := c.AddService("", StubCalck{})
 	if err != nil {
@@ -189,37 +174,35 @@ func TestRegisterService(t *testing.T) {
 		t.Error("AddConstant error " + err.Error())
 	}
 
-	ctx := c.Context.FromRequest(&http.Request{})
+	ctx := context.Background()
 	api := c.GetAPI(ctx)
 
 	if !reflect.DeepEqual(api, go_remote.API{
 		Services: map[string]go_remote.ServiceAPI{
-			"StubCalck": go_remote.ServiceAPI{
+			"StubCalck": {
 				"Add":        1,
 				"AddComplex": 1,
 			},
-			"c2": go_remote.ServiceAPI{
+			"c2": {
 				"Add":        1,
 				"AddComplex": 1,
 			},
 		},
 		Data: map[string]interface{}{},
-		Key:  "",
 	}) {
 		t.Errorf("Incorrect api serialization, %+v", api)
 	}
-
 }
 
 func TestProcessSingle(t *testing.T) {
-	c := go_remote.NewServer()
+	c := go_remote.NewServer(&go_remote.ServerConfig{})
 	m := []byte("[{ \"name\":\"StubCalck.Add\", \"args\":[2,3]}]")
 
 	err := c.AddService("", StubCalck{})
 	if err != nil {
-		t.Error("AddConstant error " + err.Error())
+		t.Error("AddService error " + err.Error())
 	}
-	ctx := c.Context.FromRequest(&http.Request{})
+	ctx := context.Background()
 	res := c.Process(m, ctx)
 
 	if len(res) != 1 || res[0].Data.(int) != 5 {
@@ -227,20 +210,25 @@ func TestProcessSingle(t *testing.T) {
 	}
 }
 
-//func TestProcessMultiple(t *testing.T) {
-//	c := []byte("[{ \"name\":\"StubCalck.Add\", \"args\":[2,3]}, { \"name\":\"StubCalck.Add\", \"args\":[-2,3]}]")
-//	s := remote.NewServer()
-//
-//	s.Register("", StubCalck{})
-//	res := s.Process(c, nil, nil)
-//
-//	if len(res) != 2 ||
-//		((res[0].Data.(int) != 5 || res[1].Data.(int) != 1) &&
-//			(res[1].Data.(int) != 5 || res[0].Data.(int) != 1)) {
-//		t.Errorf("Incorrect call result, %+v", res)
-//	}
-//}
-//
+func TestProcessMultiple(t *testing.T) {
+	c := go_remote.NewServer(&go_remote.ServerConfig{})
+	m := []byte("[{ \"name\":\"StubCalck.Add\", \"args\":[2,3]}, { \"name\":\"StubCalck.Add\", \"args\":[-2,3]}]")
+
+	err := c.AddService("", StubCalck{})
+	if err != nil {
+		t.Error("AddService error " + err.Error())
+	}
+
+	ctx := context.Background()
+	res := c.Process(m, ctx)
+
+	if len(res) != 2 ||
+		((res[0].Data.(int) != 5 || res[1].Data.(int) != 1) &&
+			(res[1].Data.(int) != 5 || res[0].Data.(int) != 1)) {
+		t.Errorf("Incorrect call result, %+v", res)
+	}
+}
+
 //func TestProcessComplex(t *testing.T) {
 //	c := []byte("[{ \"name\":\"StubCalck.AddComplex\", \"args\":[{\"X\":100,\"Y\":200},3]}]")
 //	s := remote.NewServer()

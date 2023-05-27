@@ -29,12 +29,12 @@ func (d *dependencyStore) AddProvider(provider interface{}) error {
 	pType := reflect.TypeOf(provider)
 	if pType.NumIn() != 1 || !pType.In(0).Implements(contextInterface) {
 		msg := "invalid data provider, provider must have a context as incoming parameter"
-		log.Errorf(msg)
+		log.Error(msg)
 		return errors.New(msg)
 	}
 	if pType.NumOut() != 1 && (pType.NumOut() != 2 || pType.Out(1).Implements(errorInterface)) {
 		msg := "invalid data provider, provider must return a value and optional error"
-		log.Errorf(msg)
+		log.Error(msg)
 		return errors.New(msg)
 	}
 
@@ -64,7 +64,7 @@ func (d *dependencyStore) Value(rtype reflect.Type, ctx context.Context) (reflec
 	if len(out) > 1 {
 		err, _ := out[1].Interface().(error)
 		if err != nil {
-			log.Errorf("error during calculation %s\n%s", rtype.Name(), err.Error())
+			log.Error("error during calculation", "name", rtype.Name(), "err", err.Error())
 		}
 		return out[0], true, err
 	}

@@ -28,9 +28,8 @@ type ResponseMessage struct {
 }
 
 type RequestMessage struct {
-	Action string          `json:"action"`
-	Name   string          `json:"name"`
-	Body   json.RawMessage `json:"body,omitempty"`
+	Action string `json:"action"`
+	Name   string `json:"name"`
 }
 
 type RequestMessageJSON struct {
@@ -40,12 +39,21 @@ type RequestMessageJSON struct {
 
 type RequestMessageMessagePack struct {
 	RequestMessage
-	Body json.RawMessage `json:"body,omitempty"`
+	Body msgpack.RawMessage `json:"body,omitempty"`
 }
 
 type RequestMessageCommon interface {
 	Info() *RequestMessage
+	GetBody() []byte
 	Unmarshal([]byte) error
+}
+
+func (r *RequestMessageJSON) Unmarshal(v []byte) error {
+	return json.Unmarshal(v, r)
+}
+
+func (r *RequestMessageMessagePack) Unmarshal(v []byte) error {
+	return msgpack.Unmarshal(v, r)
 }
 
 func (r RequestMessageJSON) Info() *RequestMessage {
@@ -56,12 +64,12 @@ func (r RequestMessageMessagePack) Info() *RequestMessage {
 	return &r.RequestMessage
 }
 
-func (r RequestMessageJSON) Unmarshal(v []byte) error {
-	return json.Unmarshal(v, &r)
+func (r *RequestMessageJSON) GetBody() []byte {
+	return r.Body
 }
 
-func (r RequestMessageMessagePack) Unmarshal(v []byte) error {
-	return msgpack.Unmarshal(v, &r)
+func (r *RequestMessageMessagePack) GetBody() []byte {
+	return r.Body
 }
 
 const pongWait = 60 * time.Second
@@ -100,7 +108,7 @@ func (c *Client) SendMessage(name string, body interface{}) {
 	}
 
 	if err != nil {
-		log.Errorf("error while marshalling message: %s", err.Error())
+		log.Error("error while marshalling message", "err", err)
 		return
 	}
 	c.Send <- m
@@ -123,11 +131,10 @@ func (c *Client) readPump() {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Errorf("websocket error: %v", err)
+				log.Error("websocket error", "err", err)
 			}
 			break
 		}
-		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
 
 		go c.process(message)
 	}
@@ -136,15 +143,17 @@ func (c *Client) readPump() {
 func (c *Client) process(message []byte) {
 	var m RequestMessageCommon
 	if c.Server.config.MessagePack {
-		m = RequestMessageMessagePack{}
+		m = &RequestMessageMessagePack{}
+		// log.Debug("message", "msg", hex.Dump(message))
 	} else {
-		m = RequestMessageJSON{}
+		m = &RequestMessageJSON{}
+		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
+		// log.Debug("message", "msg", string(message))
 	}
 
 	err := m.Unmarshal(message)
 	if err != nil {
-		log.Errorf("invalid message: %s", message)
-		log.Errorf(err.Error())
+		log.Error("can't unmarshal message", "msg", message, "err", err)
 		return
 	}
 
@@ -158,9 +167,9 @@ func (c *Client) process(message []byte) {
 	}
 
 	if info.Action == "call" {
-		res := c.Server.Process(info.Body, c.ctx)
+		res := c.Server.Process(m.GetBody(), c.ctx)
 		if len(res) < 1 {
-			log.Errorf("somehow process doesn't return results")
+			log.Error("somehow process doesn't return results")
 			return
 		}
 
@@ -169,6 +178,11 @@ func (c *Client) process(message []byte) {
 }
 
 func (c *Client) writePump() {
+	msgtype := websocket.TextMessage
+	if c.Server.config.MessagePack {
+		msgtype = websocket.BinaryMessage
+	}
+
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
@@ -185,7 +199,9 @@ func (c *Client) writePump() {
 				return
 			}
 
-			w, err := c.conn.NextWriter(websocket.TextMessage)
+			// log.Debug("send message", "msg", hex.Dump(message))
+
+			w, err := c.conn.NextWriter(msgtype)
 			if err != nil {
 				return
 			}
@@ -201,7 +217,7 @@ func (c *Client) writePump() {
 			// Add queued messages to the current websocket message.
 			n := len(c.Send)
 			for i := 0; i < n; i++ {
-				w, err := c.conn.NextWriter(websocket.TextMessage)
+				w, err := c.conn.NextWriter(msgtype)
 				if err != nil {
 					return
 				}

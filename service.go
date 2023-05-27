@@ -54,7 +54,8 @@ func valueByType(atype reflect.Type, i int, thecall *callInfo, args callArgs) (r
 func (s *service) Call(thecall *callInfo, args callArgs, res *Response) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf(string(debug.Stack()))
+			log.Error("method call error", "error", r)
+			log.Error(string(debug.Stack()))
 			res.Error = "Method call error"
 		}
 	}()
@@ -69,21 +70,26 @@ func (s *service) Call(thecall *callInfo, args callArgs, res *Response) {
 	mtype, ok := s.method[thecall.method]
 	if !ok {
 		res.Error = "Invalid method name"
-		log.Debugf(res.Error)
+		log.Warn(res.Error)
 		return
 	}
 
 	argv := make([]reflect.Value, len(mtype.inTypes))
-	//replyv := make([]reflect.Value, len(mtype.outTypes))
 	argv[0] = s.rcvr
 	for i := 1; i < len(mtype.inTypes); i++ {
 		argv[i], err = valueByType(mtype.inTypes[i], i-1, thecall, args)
 		if err != nil {
 			res.Error = err.Error()
-			log.Debugf("Invalid arguments, %s", err.Error())
+			log.Warn("Invalid arguments", "arg", err)
 			return
 		}
 	}
+
+	dv := make([]interface{}, len(argv))
+	for i := 1; i < len(argv); i++ {
+		dv[i] = argv[i].Interface()
+	}
+	log.Debug("args", "msg", dv)
 
 	// Invoke the method
 	returnValues := mtype.method.Func.Call(argv)
@@ -156,14 +162,14 @@ func suitableMethods(typ reflect.Type, reportErr bool) map[string]*methodType {
 			argType := mtype.In(i)
 			inTypes[i] = argType
 			if !isExportedOrBuiltinType(argType) {
-				log.Errorf(mname, "argument type not exported:", argType)
+				log.Error(mname, "argument type not exported", "type", argType)
 			}
 		}
 		for i := 0; i < out; i++ {
 			argType := mtype.Out(i)
 			outTypes[i] = argType
 			if !isExportedOrBuiltinType(argType) {
-				log.Errorf(mname, "result type not exported:", argType)
+				log.Error(mname, "result type not exported", "type", argType)
 			}
 		}
 

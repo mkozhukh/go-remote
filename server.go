@@ -110,16 +110,15 @@ func (s *Server) register(name string, rcvr interface{}, guard Guard) error {
 func (s *Server) Process(input []byte, c context.Context) []Response {
 	var data callData
 	if s.config.MessagePack {
-		data = callDataMessagePack{}
-
+		data = &callDataMessagePack{}
 	} else {
-		data = callDataJSON{}
+		data = &callDataJSON{}
 	}
 
 	err := data.Unmarshal(input)
 	response := make([]Response, data.Size())
 	if err != nil {
-		log.Errorf(err.Error())
+		log.Error(err)
 		return response
 	}
 
@@ -144,13 +143,14 @@ func (s *Server) Process(input []byte, c context.Context) []Response {
 func (s *Server) Call(call *callInfo, args callArgs, res chan *Response) {
 	response := Response{ID: call.ID}
 
-	log.Debugf("Call %s.%s", call.service, call.method)
+	log.Debug("Call", "service", call.service, "method", call.method)
 	service, ok := s.services[call.service]
 	if !ok {
 		response.Error = "Unknown service"
 	} else {
 		service.Call(call, args, &response)
 	}
+	log.Debug("result", "data", response.Data, "error", response.Error)
 
 	res <- &response
 }

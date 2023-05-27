@@ -28,12 +28,12 @@ func (s *Server) GetAPI(ctx context.Context) API {
 		} else {
 			raw, ok, err := s.Dependencies.Value(value.rtype, ctx)
 			if !ok {
-				log.Errorf("can't resolve api variable: %s", key)
+				log.Error("can't resolve api variable", "var", key)
 				continue
 			}
 
 			if err != nil {
-				log.Errorf("error during resolving api variable: %s\n%f", key, err)
+				log.Error("error during resolving api variable", "var", key, "err", err)
 				continue
 			}
 
